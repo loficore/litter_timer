@@ -88,9 +88,41 @@ pub fn build(b: *std.Build) void {
     exe.linkLibC();
 
     // 链接系统安装的 GTK4 库：这会自动查找系统中的 GTK4 库并链接
-    // 在 Linux 上，这会链接 libgtk-4.so
-    // 这也会自动包含 GTK4 的头文件路径，让 Zig 代码可以调用 GTK4 的 C API
-    exe.linkSystemLibrary("gtk4");
+    if (target.result.os.tag == .windows) {
+        // Windows (MSYS2): 添加头文件路径和直接链接 .dll.a 文件
+        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/gtk-4.0" });
+        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/pango-1.0" });
+        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/glib-2.0" });
+        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/lib/glib-2.0/include" });
+        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/harfbuzz" });
+        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/freetype2" });
+        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/libpng16" });
+        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/fribidi" });
+        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/cairo" });
+        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/pixman-1" });
+        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/gdk-pixbuf-2.0" });
+        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/graphene-1.0" });
+        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/lib/graphene-1.0/include" });
+
+        exe.addLibraryPath(.{ .cwd_relative = "C:/msys64/mingw64/lib" });
+        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libgtk-4.dll.a" });
+        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libpangowin32-1.0.dll.a" });
+        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libpangocairo-1.0.dll.a" });
+        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libpango-1.0.dll.a" });
+        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libharfbuzz.dll.a" });
+        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libgdk_pixbuf-2.0.dll.a" });
+        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libcairo-gobject.dll.a" });
+        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libcairo.dll.a" });
+        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libvulkan-1.dll.a" });
+        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libgraphene-1.0.dll.a" });
+        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libgio-2.0.dll.a" });
+        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libgobject-2.0.dll.a" });
+        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libglib-2.0.dll.a" });
+        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libintl.dll.a" });
+    } else {
+        // Linux: 使用 pkg-config 自动查找
+        exe.linkSystemLibrary("gtk4");
+    }
     // ==================================
 
     // This declares intent for the executable to be installed into the
