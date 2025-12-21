@@ -2,12 +2,7 @@ const std = @import("std");
 const little_timer = @import("little_timer");
 const windows = @import("windows.zig");
 
-pub fn main() !void {
-    // 启动 GTK 应用程序
-    // 这会创建窗口并进入 GTK 主循环
-    // 程序会一直运行直到用户关闭窗口
-    try windows.runGTKApplication();
-}
+pub fn main() !void {}
 
 test "simple test" {
     const gpa = std.testing.allocator;
