@@ -1,5 +1,65 @@
 const std = @import("std");
 
+// 传入 b (构建环境) 和命令数组，返回命令的输出字符串
+fn pkgConfigQuery(b: *std.Build, args: []const []const u8) []const u8 {
+    const result = std.process.Child.run(.{
+        .allocator = b.allocator,
+        .argv = args,
+    }) catch {
+        @panic("无法运行 pkg-config，请确保它已安装在 PATH 中");
+    };
+
+    // 检查退出状态码是否为 0
+    switch (result.term) {
+        .Exited => |code| {
+            if (code != 0) {
+                // 如果 pkg-config 报错了，我们打印出它的错误信息并崩溃
+                std.debug.print("pkg-config 错误输出: {s}\n", .{result.stderr});
+                std.debug.panic("pkg-config 执行失败 (错误码 {d})", .{result.term.Exited});
+            }
+        },
+        else => std.debug.panic("pkg-config 异常终止。\n", .{}),
+    }
+
+    return std.mem.trim(u8, result.stdout, " \n\r");
+}
+
+fn readEnvFile(allocator: std.mem.Allocator) ![]u8 {
+    // 1. 获取当前工作目录的句柄
+    const cwd = std.fs.cwd();
+
+    // 2. 打开文件（.{} 里可以放额外的权限设置，默认是只读）
+    const file = try cwd.openFile(".env", .{});
+    // 确保函数结束时关闭文件句柄
+    defer file.close();
+
+    // 3. 读取内容到内存中
+    // 我们需要一个上限（比如 4096 字节），防止读取到超大文件导致崩溃
+    const content = try file.readToEndAlloc(allocator, 4096);
+
+    return content;
+}
+
+// 将 MSYS/MinGW 的 POSIX 风格路径（例如 "/mingw64/include" 或 "\mingw64\include"）
+// 规范化为 Windows 绝对路径（例如 "C:\\msys64\\mingw64\\include"）。
+// 仅在 Windows 目标时使用。
+fn normalizeMsysPathForWindows(b: *std.Build, p: []const u8) []const u8 {
+    // 处理 /mingw64/ 或 \mingw64\ 开头的路径
+    if (std.mem.startsWith(u8, p, "/mingw64/") or std.mem.startsWith(u8, p, "\\mingw64\\") or std.mem.startsWith(u8, p, "\\mingw64/")) {
+        // 去掉开头的 / 或 \，然后拼上 C:\msys64\
+        const without_leading_slash = if (p[0] == '/' or p[0] == '\\') p[1..] else p;
+        const with_prefix = b.fmt("C:\\msys64\\{s}", .{without_leading_slash});
+        const buf = b.allocator.dupe(u8, with_prefix) catch @panic("内存分配失败");
+        // 统一替换所有 / 为 \\
+        for (buf) |*ch| {
+            if (ch.* == '/') ch.* = '\\';
+        }
+        return buf;
+    }
+    // 未识别的路径保持原样（复制一份以便生命周期安全）
+    return b.allocator.dupe(u8, p) catch @panic("内存分配失败");
+}
+
 // Although this function looks imperative, it does not perform the build
 // directly and instead it mutates the build graph (`b`) that will be then
 // executed by an external runner. The functions in `std.Build` implement a DSL
@@ -57,6 +117,7 @@ pub fn build(b: *std.Build) void {
     //
     // If neither case applies to you, feel free to delete the declaration you
     // don't need and to put everything under a single module.
+
     const exe = b.addExecutable(.{
         .name = "little_timer",
         .root_module = b.createModule(.{
@@ -84,44 +145,42 @@ pub fn build(b: *std.Build) void {
     });
 
     // ========== GTK4 依赖配置 ==========
-    // 链接 C 标准库：GTK4 是用 C 编写的，所以需要链接 libc
+    // 1. 链接 libc (必要，因为使用了 C 库)
     exe.linkLibC();
 
-    // 链接系统安装的 GTK4 库：这会自动查找系统中的 GTK4 库并链接
     if (target.result.os.tag == .windows) {
-        // Windows (MSYS2): 添加头文件路径和直接链接 .dll.a 文件
-        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/gtk-4.0" });
-        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/pango-1.0" });
-        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/glib-2.0" });
-        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/lib/glib-2.0/include" });
-        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/harfbuzz" });
-        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/freetype2" });
-        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/libpng16" });
-        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/fribidi" });
-        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/cairo" });
-        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/pixman-1" });
-        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/gdk-pixbuf-2.0" });
-        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/include/graphene-1.0" });
-        exe.addIncludePath(.{ .cwd_relative = "C:/msys64/mingw64/lib/graphene-1.0/include" });
+        const mingw_lib = "C:\\msys64\\mingw64\\lib";
 
-        exe.addLibraryPath(.{ .cwd_relative = "C:/msys64/mingw64/lib" });
-        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libgtk-4.dll.a" });
-        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libpangowin32-1.0.dll.a" });
-        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libpangocairo-1.0.dll.a" });
-        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libpango-1.0.dll.a" });
-        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libharfbuzz.dll.a" });
-        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libgdk_pixbuf-2.0.dll.a" });
-        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libcairo-gobject.dll.a" });
-        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libcairo.dll.a" });
-        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libvulkan-1.dll.a" });
-        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libgraphene-1.0.dll.a" });
-        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libgio-2.0.dll.a" });
-        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libgobject-2.0.dll.a" });
-        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libglib-2.0.dll.a" });
-        exe.addObjectFile(.{ .cwd_relative = "C:/msys64/mingw64/lib/libintl.dll.a" });
+        // 2. 使用 pkg-config 获取 GTK4 的编译标志（包含头文件路径等）
+        const gtk_cflags = pkgConfigQuery(b, &.{ "pkg-config", "--dont-define-prefix", "--cflags", "--libs", "gtk4" });
+        var gtk_cflags_split = std.mem.tokenizeAny(u8, gtk_cflags, " ");
+
+        while (gtk_cflags_split.next()) |raw_flag| {
+            const flag = std.mem.trim(u8, raw_flag, " \n\r");
+            if (flag.len < 2) continue; //忽略无效标志
+
+            if (std.mem.startsWith(u8, flag, "-I")) {
+                const include_path_raw = flag[2..];
+                const include_path = normalizeMsysPathForWindows(b, include_path_raw);
+                // 使用绝对路径，避免生成 "\\mingw64\\..." 这样的无效根路径
+                exe.addIncludePath(.{ .cwd_relative = include_path });
+            } else if (std.mem.startsWith(u8, flag, "-l")) {
+                const lib_name = b.fmt("lib{s}.dll.a", .{flag[2..]});
+                const lib_full_path = std.fs.path.join(b.allocator, &.{ mingw_lib, lib_name }) catch {
+                    std.debug.panic("无法构建库文件路径。\n", .{});
+                };
+                // 直接把 .dll.a 文件喂给链接器，避开 Zig 的搜索策略问题
+                exe.addObjectFile(.{ .cwd_relative = lib_full_path });
+            } else if (std.mem.startsWith(u8, flag, "-L")) {
+                const lib_path_raw = flag[2..];
+                const lib_path = normalizeMsysPathForWindows(b, lib_path_raw);
+                exe.addLibraryPath(.{ .cwd_relative = lib_path });
+            }
+        }
     } else {
-        // Linux: 使用 pkg-config 自动查找
+        // Linux 和其他 Unix 平台：使用 pkg-config
         exe.linkSystemLibrary("gtk4");
+        exe.linkSystemLibrary("glib-2.0");
     }
     // ==================================
 

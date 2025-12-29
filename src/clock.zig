@@ -76,6 +76,7 @@ pub const ClockManager = struct {
             .countdown => ClockState{
                 .COUNTDOWN_MODE = CountdownState{
                     .remaining_ms = @as(i64, @intCast(clock_config.countdown.duration_seconds * 1000)),
+                    .is_paused = true,
                 },
             },
             .stopwatch => ClockState{

@@ -1,5 +1,6 @@
 const std = @import("std");
 const app = @import("app.zig");
+const clock = @import("clock.zig");
 
 pub fn main() !void {
     // 1. 创建内存分配器
@@ -11,8 +12,14 @@ pub fn main() !void {
     const main_app = try allocator.create(app.MainApplication);
     defer allocator.destroy(main_app);
 
+    const clock_config = clock.ClockTaskConfigT{
+        .countdown = .{
+            .duration_seconds = 25 * 60,
+            .loop = false,
+        },
+    };
     // 3. 初始化应用程序（在指针上原地初始化）
-    try main_app.init(allocator);
+    try main_app.init(allocator, clock_config);
 
     // 4. 设置全局指针（这样回调函数才能访问 app 实例）
     main_app.setGlobalApp();

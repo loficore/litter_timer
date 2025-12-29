@@ -128,12 +128,18 @@ pub const WindowsManager = struct {
         // 运行应用程序主循环
         // 这会阻塞程序，直到窗口关闭
         // 返回值是应用程序的退出状态码（0 表示正常退出）
+        if (self.application == null) {
+            std.debug.print("Error: GTK Application is null\n", .{});
+            return error.ApplicationNotInitialized;
+        }
+
         const status = gtk.g_application_run(@ptrCast(self.application), 0, null);
         // 释放应用程序对象
         gtk.g_object_unref(self.application);
 
         // 如果状态码不为 0，表示应用程序异常退出
         if (status != 0) {
+            std.debug.print("GTK Application exited with status code: {}\n", .{status});
             return error.ApplicationExitedWithError;
         }
     }
@@ -142,13 +148,18 @@ pub const WindowsManager = struct {
 /// GTK "activate" 信号回调函数
 /// 当 GTK 应用程序启动时调用
 fn onActivate(app_ptr: ?*gtk.GtkApplication, user_data: ?*anyopaque) callconv(.c) void {
-    if (app_ptr == null or user_data == null) return;
+    if (app_ptr == null or user_data == null) {
+        std.debug.print("Error: onActivate received null pointers\n", .{});
+        return;
+    }
 
     const self: *WindowsManager = @ptrCast(@alignCast(user_data.?));
     self.application = app_ptr;
 
     CreateGTKApplication(app_ptr) catch |err| {
         std.debug.print("创建窗口失败: {}\n", .{err});
+        // 关闭应用程序
+        gtk.g_application_quit(@ptrCast(app_ptr));
     };
 }
 
@@ -165,8 +176,8 @@ fn onPauseButtonClicked(button: ?*gtk.GtkButton, user_data: ?*anyopaque) callcon
 
 /// 按钮点击回调函数
 /// 当用户点击按钮时，这个函数会被调用
-/// @param button: 被点击的按钮控件
-/// @param user_data: 传递给回调函数的用户数据（这里不使用）
+/// - **param** : **button**: 被点击的按钮控件
+/// - **param** : **user_data**: 传递给回调函数的用户数据（这里不使用）
 fn onButtonClicked(button: ?*gtk.GtkButton, user_data: ?*anyopaque) callconv(.c) void {
     _ = button; // 不使用 button 参数
     _ = user_data; // 不使用用户数据

@@ -17,14 +17,9 @@ pub const MainApplication = struct {
     allocator: std.mem.Allocator,
 
     /// 初始化应用程序（在指针上原地初始化）
-    pub fn init(self: *MainApplication, allocator: std.mem.Allocator) !void {
+    pub fn init(self: *MainApplication, allocator: std.mem.Allocator, clock_config_param: clock.ClockTaskConfigT) !void {
         // 1. 创建默认时钟配置（倒计时 25 分钟 - 番茄钟）
-        const clock_config = clock.ClockTaskConfigT{
-            .countdown = .{
-                .duration_seconds = 25 * 60,
-                .loop = false,
-            },
-        };
+        const clock_config = clock_config_param;
 
         // 2. 初始化时钟管理器
         self.clock_manager = clock.ClockManager.init(clock_config);
@@ -39,10 +34,7 @@ pub const MainApplication = struct {
         // 5. 初始化 GTK，传入事件处理回调
         try self.windows_manager.init(handleUserEvent, self);
 
-        // 6. 启动时钟（通过发送 user_press_pause 来切换暂停状态）
-        self.clock_manager.handleEvent(.user_press_pause);
-
-        // 7. 立即更新显示，显示初始时间
+        // 6. 立即更新显示，显示初始时间
         const initial_display = self.clock_manager.update();
         self.windows_manager.updateDisplay(initial_display);
     }
