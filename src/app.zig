@@ -25,14 +25,14 @@ pub const MainApplication = struct {
         self.clock_manager = clock.ClockManager.init(clock_config);
 
         // 3. 初始化窗口管理器
-        self.windows_manager = .{ .application = null };
+        self.windows_manager = .{ .application = null, .clock_label = null, .extern_param = undefined };
         self.allocator = allocator;
 
         // 4. 设置全局 App 指针，供回调函数访问
         self.setGlobalApp();
 
         // 5. 初始化 GTK，传入事件处理回调
-        try self.windows_manager.init(handleUserEvent, self);
+        try self.windows_manager.init(handleUserEventWrapper, .{ .ctx = self, .tick_handler = MainApplication.tick });
 
         // 6. 立即更新显示，显示初始时间
         const initial_display = self.clock_manager.update();
@@ -55,11 +55,12 @@ pub const MainApplication = struct {
 
     /// 应用程序 tick - 更新逻辑并刷新显示
     /// 应该每帧调用一次（例如 60 FPS = 16ms）
-    pub fn tick(self: *MainApplication, delta_ms: i64) ?void {
+    pub fn tick(ctx: ?*anyopaque, delta_ms: i64) void {
         // 1. 发送 tick 事件给时钟
+        const self: *MainApplication = @ptrCast(@alignCast(ctx));
         self.clock_manager.handleEvent(.{ .tick = delta_ms });
 
-        // 2. 获取时钟的显示数据
+        // 2. 获取时钟的显示数据（无需分配，返回内部指针）
         const display_data = self.clock_manager.update();
 
         // 3. 更新窗口显示
@@ -68,7 +69,7 @@ pub const MainApplication = struct {
 
     /// 处理来自用户界面的事件（回调函数）
     /// 这是事件向上冒泡的入口点
-    fn handleUserEvent(event: clock.ClockEvent) void {
+    fn handleUserEvent(_: *MainApplication, event: clock.ClockEvent) void {
         if (global_app) |app| {
             // 将用户事件转发给时钟管理器
             app.clock_manager.handleEvent(event);
@@ -76,6 +77,13 @@ pub const MainApplication = struct {
             // 立即更新显示
             const display_data = app.clock_manager.update();
             app.windows_manager.updateDisplay(display_data);
+        }
+    }
+
+    /// 事件处理器包装函数 - 适配窗口管理器期望的函数签名
+    fn handleUserEventWrapper(event: clock.ClockEvent) void {
+        if (global_app) |app| {
+            app.handleUserEvent(event);
         }
     }
 };

@@ -1,3 +1,5 @@
 .roo/
 .zig-cache/
 zig-out
+
+.vscode/

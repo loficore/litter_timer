@@ -1,5 +1,13 @@
 //! 时钟模块
 const std = @import("std");
+const interface = @import("interface.zig");
+
+// 重新导出接口模块的公共类型
+pub const ClockInterfaceT = interface.ClockInterfaceT;
+pub const ClockEvent = interface.ClockEvent;
+pub const ModeEnumT = interface.ModeEnumT;
+pub const ClockInterfaceUnion = interface.ClockInterfaceUnion;
+pub const ClockInterfaceData = interface.ClockInterfaceData;
 
 // 导出配置类型
 pub const ClockTaskConfigT = union(enum) {
@@ -33,43 +41,39 @@ const CountdownState = struct {
             self.is_finished = true;
         }
     }
+
+    pub fn pasue(self: *CountdownState) void {
+        self.is_paused = true;
+    }
 };
 
-pub const ModeEnumT = enum {
-    COUNTDOWN_MODE,
-    STOPWATCH_MODE,
-    WORLD_CLOCK_MODE,
+const StopwatchState = struct {
+    esplased_ms: i64,
+    max_ms: i64,
+    is_paused: bool = true, // 是否暂停
+    is_finished: bool = false,
+
+    pub fn tick(self: *StopwatchState, delta_ms: i64) void {
+        if (self.is_paused or self.is_finished) return;
+        self.esplased_ms += delta_ms;
+        if (self.esplased_ms > self.max_ms) {
+            self.esplased_ms = self.max_ms;
+            self.is_finished = true;
+        }
+    }
 };
 
+// 以上类型从 interface.zig 重新导出
 const ClockState = union(ModeEnumT) {
     COUNTDOWN_MODE: CountdownState,
-    STOPWATCH_MODE: void, // 待扩展
+    STOPWATCH_MODE: StopwatchState,
     WORLD_CLOCK_MODE: void,
-};
-
-// 导出事件类型，供 App 和 Windows 使用
-pub const ClockEvent = union(enum) {
-    tick: i64, // 毫秒增量
-    user_press_pause: void, // 用户按了暂停
-    user_set_duration: u64, // 用户修改了总时长
-    system_low_battery: void, // 系统电量低（可能触发自动暂停）,暂时不实现相关的事件逻辑
-};
-
-// 导出接口类型，这是 Clock 提供给外部的显示数据
-pub const ClockInterfaceT = struct {
-    mode: ModeEnumT, // 当前时钟模式
-
-    // 倒计时模式数据
-    remaining_seconds: u64 = 0, // 剩余秒数
-
-    // 状态标志
-    is_paused: bool = true,
-    is_finished: bool = false,
 };
 
 pub const ClockManager = struct {
     state: ClockState,
     last_tick_time: i64 = 0,
+    display_data: ClockInterfaceData = undefined, // 复用的显示数据
 
     pub fn init(clock_config: ClockTaskConfigT) ClockManager {
         const state = switch (clock_config) {
@@ -80,7 +84,10 @@ pub const ClockManager = struct {
                 },
             },
             .stopwatch => ClockState{
-                .STOPWATCH_MODE = {},
+                .STOPWATCH_MODE = StopwatchState{
+                    .esplased_ms = @as(i64, @intCast(clock_config.stopwatch.max_seconds * 1000)),
+                    .max_ms = @as(i64, @intCast(clock_config.stopwatch.max_seconds * 1000)),
+                },
             },
             .world_clock => ClockState{
                 .WORLD_CLOCK_MODE = {},
@@ -104,6 +111,7 @@ pub const ClockManager = struct {
                     },
                     .STOPWATCH_MODE => {
                         // TODO: 实现正计时暂停逻辑
+                        self.state.STOPWATCH_MODE.is_paused = !self.state.STOPWATCH_MODE.is_paused;
                     },
                     .WORLD_CLOCK_MODE => {
                         // 世界时钟不支持暂停
@@ -126,6 +134,7 @@ pub const ClockManager = struct {
             },
             .STOPWATCH_MODE => {
                 // TODO: 实现正计时逻辑
+                self.state.STOPWATCH_MODE.tick(tick.tick);
             },
             .WORLD_CLOCK_MODE => {
                 // 世界时钟不需要 tick
@@ -133,28 +142,41 @@ pub const ClockManager = struct {
         }
     }
 
-    pub fn update(self: *ClockManager) ClockInterfaceT {
-        var display_data: ClockInterfaceT = undefined;
+    /// 对外部更新数据的函数
+    /// 返回内部数据的指针，无需分配和释放
+    pub fn update(self: *ClockManager) *ClockInterfaceT {
         switch (self.state) {
             .COUNTDOWN_MODE => {
-                display_data = ClockInterfaceT{
-                    .mode = ModeEnumT.COUNTDOWN_MODE,
-                    .remaining_seconds = @as(u64, @intCast(@divTrunc(self.state.COUNTDOWN_MODE.remaining_ms, 1000))),
-                    .is_paused = self.state.COUNTDOWN_MODE.is_paused,
-                    .is_finished = self.state.COUNTDOWN_MODE.is_finished,
+                self.display_data.mode = ModeEnumT.COUNTDOWN_MODE;
+                self.display_data.info = ClockInterfaceUnion{
+                    .countdown = .{
+                        .remaining_ms = self.state.COUNTDOWN_MODE.remaining_ms,
+                        .is_paused = self.state.COUNTDOWN_MODE.is_paused,
+                        .is_finished = self.state.COUNTDOWN_MODE.is_finished,
+                    },
                 };
             },
             .STOPWATCH_MODE => {
-                display_data = ClockInterfaceT{
-                    .mode = ModeEnumT.STOPWATCH_MODE,
+                self.display_data.mode = ModeEnumT.STOPWATCH_MODE;
+                self.display_data.info = ClockInterfaceUnion{
+                    .stopwatch = .{
+                        .esplased_ms = self.state.STOPWATCH_MODE.esplased_ms,
+                        .max_ms = self.state.STOPWATCH_MODE.max_ms,
+                        .is_paused = self.state.STOPWATCH_MODE.is_paused,
+                        .is_finished = self.state.STOPWATCH_MODE.is_finished,
+                    },
                 };
             },
             .WORLD_CLOCK_MODE => {
-                display_data = ClockInterfaceT{
-                    .mode = ModeEnumT.WORLD_CLOCK_MODE,
+                self.display_data.mode = ModeEnumT.WORLD_CLOCK_MODE;
+                self.display_data.info = ClockInterfaceUnion{
+                    .worldclock = .{
+                        .timezone = 8,
+                        .time = 0,
+                    },
                 };
             },
         }
-        return display_data;
+        return @ptrCast(&self.display_data);
     }
 };

@@ -2,20 +2,23 @@ const gtk = @cImport({
     @cInclude("gtk/gtk.h");
 });
 
-const app = @import("app.zig");
-
 // 需要导入 std 来处理错误
 const std = @import("std");
+const interface = @import("interface.zig");
 
-const ClockInterfaceT = @import("clock.zig").ClockInterfaceT;
-const ModeEnumT = @import("clock.zig").ModeEnumT;
-const UserEventT = @import("clock.zig").ClockEvent;
+// 在 windows.zig 中定义
+const TickFn = *const fn (ctx: ?*anyopaque, delta_ms: i64) void;
+
+const UserEventT = interface.ClockEvent;
+
+const externParam = struct { ctx: ?*anyopaque, tick_handler: TickFn };
 
 // 全局变量：用于在 GTK 回调中访问（因为 GTK 是 C API）
 var global_time_string: [9:0]u8 = .{ '0', '0', ':', '0', '0', ':', '0', '0', 0 };
 var global_on_user_event: ?*const fn (UserEventT) void = null;
 var global_clock_label: ?*gtk.GtkLabel = null;
 var global_windows_manager: ?*WindowsManager = null;
+var global_extern_param: externParam = undefined;
 
 const Constants = struct {
     pub const APP_ID = "com.example.LittleTimer";
@@ -30,9 +33,10 @@ const Constants = struct {
 pub const WindowsManager = struct {
     application: ?*gtk.GtkApplication, // 实例字段（不是静态！）
     clock_label: ?*gtk.GtkLabel = null, // 保存时钟标签的指针，用于更新显示
+    extern_param: externParam, // 保存外部参数（上下文和回调函数）
 
     /// 初始化 UI（创建 GTK 应用，但不启动主循环）
-    pub fn init(self: *WindowsManager, on_user_event_param: ?*const fn (UserEventT) void, main_app: *app.MainApplication) !void {
+    pub fn init(self: *WindowsManager, on_user_event_param: ?*const fn (UserEventT) void, extern_param: externParam) !void {
         const temp_string = "00:00:00";
         // 复制初始时间字符串
         std.mem.copyForwards(u8, &global_time_string, temp_string);
@@ -70,23 +74,28 @@ pub const WindowsManager = struct {
 
         // 设置主应用程序指针到 GTK 应用程序的用户数据中
         // 这样在回调中可以访问 main_app 实例
-        setupTimer(main_app);
+
+        self.extern_param = extern_param;
+        global_extern_param = extern_param;
+        setupTimer();
     }
 
     // 更新显示（app 每帧调用）
-    pub fn updateDisplay(self: *WindowsManager, display_data: ClockInterfaceT) void {
+    pub fn updateDisplay(self: *WindowsManager, display_data: *interface.ClockInterfaceT) void {
+        const remaining_seconds = display_data.getTimeInfo();
+
         // 根据 display_data 更新 global_time_string
-        const hours = display_data.remaining_seconds / 3600;
-        const minutes = (display_data.remaining_seconds % 3600) / 60;
-        const seconds = display_data.remaining_seconds % 60;
+        const hours = @divTrunc(remaining_seconds, 3600);
+        const minutes = @divTrunc(@rem(remaining_seconds, 3600), 60);
+        const seconds = @rem(remaining_seconds, 60);
 
         // 手动填充时间字符串为 "HH:MM:SS"
-        const h1: u8 = @intCast((hours / 10) % 10);
-        const h2: u8 = @intCast(hours % 10);
-        const m1: u8 = @intCast((minutes / 10) % 10);
-        const m2: u8 = @intCast(minutes % 10);
-        const s1: u8 = @intCast((seconds / 10) % 10);
-        const s2: u8 = @intCast(seconds % 10);
+        const h1: u8 = @intCast(@rem(@divTrunc(hours, 10), 10));
+        const h2: u8 = @intCast(@rem(hours, 10));
+        const m1: u8 = @intCast(@rem(@divTrunc(minutes, 10), 10));
+        const m2: u8 = @intCast(@rem(minutes, 10));
+        const s1: u8 = @intCast(@rem(@divTrunc(seconds, 10), 10));
+        const s2: u8 = @intCast(@rem(seconds, 10));
 
         global_time_string[0] = '0' + h1;
         global_time_string[1] = '0' + h2;
@@ -299,18 +308,18 @@ pub fn CreateGTKApplication(gtk_app: ?*gtk.GtkApplication) !void {
     gtk.gtk_window_present(@ptrCast(window));
 }
 
-fn setupTimer(main_app: *app.MainApplication) void {
+fn setupTimer() void {
     _ = gtk.g_timeout_add(
         16, // 16ms = ~60 FPS
         timerCallback,
-        @ptrCast(main_app),
+        null,
     );
 }
 
 fn timerCallback(user_data: ?*anyopaque) callconv(.c) c_int {
-    if (user_data == null) return 0;
-
-    const main_app_temp: *app.MainApplication = @ptrCast(@alignCast(user_data.?));
-    _ = main_app_temp.tick(16);
+    _ = user_data; // 不使用，改用全局变量
+    const params = global_extern_param;
+    const tick_callback: TickFn = params.tick_handler;
+    tick_callback(params.ctx, 16);
     return 1; // 返回 1 继续定时器
 }
