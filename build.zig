@@ -184,6 +184,30 @@ pub fn build(b: *std.Build) void {
     }
     // ==================================
 
+    // ========== WebUI 测试可执行文件 ==========
+    // 导入 webui 依赖
+    const webui_dep = b.dependency("webui", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const ui_test_exe = b.addExecutable(.{
+        .name = "ui-test",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/webui_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "webui", .module = webui_dep.module("webui") },
+            },
+        }),
+    });
+
+    ui_test_exe.linkLibC(); // webui 需要链接 libc
+
+    b.installArtifact(ui_test_exe);
+    // =========================================
+
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
     // step). By default the install prefix is `zig-out/` but can be overridden
