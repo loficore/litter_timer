@@ -1,3 +1,8 @@
+/**
+ * 主页控制面板组件
+ * 渲染开始/暂停/重置按钮，支持自定义动画延迟
+ */
+
 import type { FunctionalComponent } from "preact";
 import { t } from "../utils/i18n";
 import { Button } from "./Button";

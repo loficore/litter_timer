@@ -1,7 +1,14 @@
+/**
+ * 设置项组件
+ * 一行标签 + 控件的标准设置项布局
+ */
+
 import type { ComponentChildren } from "preact";
 
 interface SettingItemProps {
+  /** 显示在左侧的标签 */
   label: string;
+  /** 右侧控件内容 */
   children: ComponentChildren;
 }
 

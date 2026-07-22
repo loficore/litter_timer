@@ -1,8 +1,16 @@
+/**
+ * 骨架屏组件集合
+ * Skeleton 单块占位、SkeletonText 多行文字占位、SkeletonCard 卡片占位
+ */
+
 import type { FunctionalComponent } from "preact";
 
 interface SkeletonProps {
+  /** 占位块宽度（CSS 长度） */
   width?: string;
+  /** 占位块高度（CSS 长度） */
   height?: string;
+  /** 自定义 className */
   className?: string;
 }
 
@@ -20,8 +28,13 @@ export const Skeleton: FunctionalComponent<SkeletonProps> = ({
   );
 };
 
+/**
+ * 多行文字骨架屏属性
+ */
 interface SkeletonTextProps {
+  /** 行数 */
   lines?: number;
+  /** 自定义 className */
   className?: string;
 }
 
@@ -42,7 +55,11 @@ export const SkeletonText: FunctionalComponent<SkeletonTextProps> = ({
   );
 };
 
+/**
+ * 卡片骨架屏属性
+ */
 interface SkeletonCardProps {
+  /** 自定义 className */
   className?: string;
 }
 

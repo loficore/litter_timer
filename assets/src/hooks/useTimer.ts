@@ -10,45 +10,84 @@ import { formatDuration } from "../utils/formatters";
 
 export type TimerMode = "stopwatch" | "countdown";
 
+/**
+ * 计时器配置。
+ */
 export interface TimerConfig {
+  /** 计时模式：正计时或倒计时。 */
   mode: TimerMode;
+  /** 工作阶段的时长，单位为秒。 */
   workDuration: number;
+  /** 休息阶段的时长，单位为秒。 */
   restDuration: number;
+  /** 循环次数，0 表示不限制次数。 */
   loopCount: number;
 }
 
+/**
+ * 计时器的运行时状态。
+ */
 export interface TimerState {
+  /** 是否正在计时。 */
   isRunning: boolean;
+  /** 是否已暂停计时。 */
   isPaused: boolean;
+  /** 倒计时是否已完成。 */
   isFinished: boolean;
+  /** 当前是否处于休息阶段。 */
   isResting: boolean;
+  /** 当前循环轮次。 */
   currentRound: number;
+  /** 已计时秒数。 */
   elapsedSeconds: number;
+  /** 剩余秒数。 */
   remainingSeconds: number;
 }
 
+/**
+ * useTimer 返回的计时器状态与控制方法。
+ */
 export interface UseTimerReturn {
-  // 状态
+  /** 当前计时器配置。 */
   timerConfig: TimerConfig;
+  /** 是否正在计时。 */
   isRunning: boolean;
+  /** 是否已暂停计时。 */
   isPaused: boolean;
+  /** 倒计时是否已完成。 */
   isFinished: boolean;
+  /** 当前是否处于休息阶段。 */
   isResting: boolean;
+  /** 当前循环轮次。 */
   currentRound: number;
+  /** 已计时秒数。 */
   elapsedSeconds: number;
+  /** 剩余秒数。 */
   remainingSeconds: number;
+  /** 按当前计时模式格式化后的显示时间。 */
   displayTime: string;
 
-  // 操作
+  /** 更新计时器配置，未提供的字段保持不变。 */
   setTimerConfig: (config: Partial<TimerConfig>) => void;
+  /** 开始计时，可选关联一个习惯 ID。 */
   start: (habitId?: number) => Promise<void>;
+  /** 暂停当前计时。 */
   pause: () => Promise<void>;
+  /** 恢复计时，可选关联一个习惯 ID。 */
   resume: (habitId?: number) => Promise<void>;
+  /** 重置计时器状态。 */
   reset: () => Promise<void>;
+  /** 跳转到倒计时的下一个工作或休息阶段。 */
   skipToNext: () => void;
+  /** 完成当前计时并返回本次已计时的秒数。 */
   finish: () => Promise<{ elapsed_seconds: number }>;
 }
 
+/**
+ * 管理计时器配置、运行状态和计时控制操作。
+ *
+ * @returns 计时器状态、格式化显示时间及控制方法。
+ */
 export const useTimer = (): UseTimerReturn => {
   const apiClientRef = useRef(getAPIClient());
   const rafRef = useRef<number | null>(null);

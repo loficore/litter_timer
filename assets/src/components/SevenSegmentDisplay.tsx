@@ -1,9 +1,16 @@
+/**
+ * 七段数码管显示组件
+ * 将字符串按字符渲染为经典电子钟风格的七段数码管
+ */
+
 import type { FunctionalComponent } from "preact";
 import { memo } from "preact/compat";
 import { useMemo } from "preact/hooks";
 
+/** 七段数码管段位标识 */
 type Segment = "a" | "b" | "c" | "d" | "e" | "f" | "g";
 
+/** 数字/符号到段位集合的映射表 */
 const DIGIT_SEGMENTS: Record<string, Segment[]> = {
   "0": ["a", "b", "c", "d", "e", "f"],
   "1": ["b", "c"],
@@ -19,14 +26,18 @@ const DIGIT_SEGMENTS: Record<string, Segment[]> = {
 };
 
 interface SevenSegmentDisplayProps {
+  /** 要显示的字符串（支持数字、冒号 "-"） */
   value: string;
+  /** 自定义 className */
   className?: string;
 }
 
 const SEGMENT_ORDER: Segment[] = ["a", "b", "c", "d", "e", "f", "g"];
 
 interface SevenSegmentDigitProps {
+  /** 当前字符 */
   char: string;
+  /** 该字符对应要点亮的段位 */
   onSegments: Segment[];
 }
 

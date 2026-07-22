@@ -1,9 +1,16 @@
+/**
+ * 时间显示组件
+ * 居中显示当前时间字符串，运行时附带发光特效
+ */
+
 import type { FunctionalComponent } from "preact";
 import { memo } from "preact/compat";
 import { useMemo } from "preact/hooks";
 
 interface TimeDisplayProps {
+  /** 要显示的时间字符串（如 "12:34" 或 "1:23:45"） */
   time: string;
+  /** 计时器是否正在运行，用于决定样式与发光效果 */
   isRunning: boolean;
 }
 

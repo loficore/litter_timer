@@ -45,7 +45,8 @@ const (
 	PBKDF2Iterations   = 100_000
 )
 
-// CryptoError mirrors `pub const CryptoError = error{...}`.
+// CryptoError 对应 Zig 源码中的 `pub const CryptoError = error{...}`，
+// 是一个类型化哨兵错误，可通过 errors.Is / errors.As 进行匹配。
 type CryptoError string
 
 const (
@@ -61,14 +62,14 @@ func (e CryptoError) Error() string { return string(e) }
 // Random helpers.
 // -----------------------------------------------------------------------------
 
-// GenerateKey returns a fresh 32-byte AES-256 key.  Mirrors
-// `pub fn generateKey()`.
+// GenerateKey 返回一个新生成的 32 字节 AES-256 密钥。对应 Zig 中的
+// `pub fn generateKey()`。
 func GenerateKey() []byte { return randomBytes(AES256GCMKeySize) }
 
-// GenerateNonce returns a fresh 12-byte GCM nonce.
+// GenerateNonce 返回一个新生成的 12 字节 GCM nonce。
 func GenerateNonce() []byte { return randomBytes(AES256GCMNonceSize) }
 
-// GenerateSalt returns a fresh 16-byte salt for PBKDF2.
+// GenerateSalt 返回一个新生成的 16 字节 PBKDF2 salt。
 func GenerateSalt() []byte { return randomBytes(SaltSize) }
 
 // randomBytes reads n bytes from crypto/rand; on error (extremely rare —
@@ -82,9 +83,9 @@ func randomBytes(n int) []byte {
 	return buf
 }
 
-// DeriveKey runs PBKDF2-HMAC-SHA256(password, salt, 100_000) → 32-byte key.
-// Mirrors `pub fn deriveKey`; Zig uses HmacSha256, here we use
-// `crypto/sha256` via `golang.org/x/crypto/pbkdf2`.
+// DeriveKey 使用 PBKDF2-HMAC-SHA256(password, salt, 100_000) 派生 32 字节密钥。
+// 对应 Zig 中的 `pub fn deriveKey`：Zig 端使用 HmacSha256，本实现改用
+// `crypto/sha256` + `golang.org/x/crypto/pbkdf2`。
 func DeriveKey(password, salt []byte) ([]byte, error) {
 	if len(salt) != SaltSize {
 		return nil, fmt.Errorf("%w: salt must be %d bytes, got %d",
@@ -99,8 +100,8 @@ func DeriveKey(password, salt []byte) ([]byte, error) {
 // is len(plaintext)+NonceSize+TagSize bytes.
 // -----------------------------------------------------------------------------
 
-// Encrypt seals plaintext with AES-256-GCM using the provided key and nonce.
-// The returned blob is nonce || ciphertext || tag.
+// Encrypt 使用 AES-256-GCM 与给定的 key/nonce 加密明文。返回的二进制数据
+// 布局为 nonce || ciphertext || tag。
 func Encrypt(plaintext, key, nonce []byte) ([]byte, error) {
 	if len(key) != AES256GCMKeySize {
 		return nil, fmt.Errorf("%w: key must be %d bytes, got %d",
@@ -122,8 +123,8 @@ func Encrypt(plaintext, key, nonce []byte) ([]byte, error) {
 	return sealed, nil
 }
 
-// Decrypt opens a blob produced by Encrypt.  Returns an
-// ErrAuthenticationFailed if the tag does not verify.
+// Decrypt 解密由 Encrypt 产生的二进制数据。当 GCM tag 校验失败时返回
+// ErrAuthenticationFailed。
 func Decrypt(blob, key []byte) ([]byte, error) {
 	if len(key) != AES256GCMKeySize {
 		return nil, fmt.Errorf("%w: key must be %d bytes, got %d",
@@ -151,9 +152,8 @@ func Decrypt(blob, key []byte) ([]byte, error) {
 // Wire format: salt(16) || nonce(12) || ciphertext(N) || tag(16).
 // -----------------------------------------------------------------------------
 
-// EncryptWithPassword derives a 32-byte key from password+salt and seals
-// plaintext.  The salt is generated internally; caller must persist the
-// returned blob to recover the plaintext.
+// EncryptWithPassword 从 password+salt 派生 32 字节密钥，再加密明文。
+// salt 在内部生成，调用方需持久化返回的 blob 以便后续恢复明文。
 func EncryptWithPassword(plaintext, password []byte) ([]byte, error) {
 	salt := GenerateSalt()
 	key, err := DeriveKey(password, salt)
@@ -174,7 +174,7 @@ func EncryptWithPassword(plaintext, password []byte) ([]byte, error) {
 	return out, nil
 }
 
-// DecryptWithPassword opens a blob produced by EncryptWithPassword.
+// DecryptWithPassword 解密由 EncryptWithPassword 产生的二进制数据。
 func DecryptWithPassword(blob, password []byte) ([]byte, error) {
 	if len(blob) < SaltSize+AES256GCMNonceSize+AES256GCMTagSize {
 		return nil, fmt.Errorf("%w: blob too short (%d bytes)",

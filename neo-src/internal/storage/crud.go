@@ -16,7 +16,7 @@ import (
 	"little-timer/internal/domain"
 )
 
-// CrudError mirrors `pub const CrudError = error{...}` in storage_crud.zig.
+// CrudError 表示设置项 CRUD 操作可能返回的存储层错误。
 type CrudError string
 
 const (
@@ -28,38 +28,51 @@ const (
 
 func (e CrudError) Error() string { return string(e) }
 
-// SettingsRow is the Go port of `pub const SettingsRow = struct {...}` in
-// storage_crud.zig.  It's a low-level view of a single `settings` row — the
+// SettingsRow 表示 settings 表中的一行底层数据。
 // higher-level domain.SettingsConfig is what callers actually pass in.
 type SettingsRow struct {
-	ID                    int64
-	Timezone              int8
-	Language              string
-	DefaultMode           string
-	ThemeMode             string
-	Wallpaper             string
-	DurationSeconds       int64
-	CountdownLoop         bool
-	CountdownLoopCount    int64
+	// ID 是设置行的固定主键。
+	ID int64
+	// Timezone 是用户时区偏移。
+	Timezone int8
+	// Language 是界面语言代码。
+	Language string
+	// DefaultMode 是默认计时模式。
+	DefaultMode string
+	// ThemeMode 是界面主题模式。
+	ThemeMode string
+	// Wallpaper 是壁纸标识或路径。
+	Wallpaper string
+	// DurationSeconds 是默认倒计时秒数。
+	DurationSeconds int64
+	// CountdownLoop 表示是否启用循环倒计时。
+	CountdownLoop bool
+	// CountdownLoopCount 是循环总次数，0 表示无限循环。
+	CountdownLoopCount int64
+	// CountdownLoopInterval 是循环间隔秒数。
 	CountdownLoopInterval int64
-	StopwatchMaxSeconds   int64
-	LogLevel              string
-	LogEnableTimestamp    bool
-	LogTickInterval       int64
+	// StopwatchMaxSeconds 是正计时最大秒数。
+	StopwatchMaxSeconds int64
+	// LogLevel 是日志级别。
+	LogLevel string
+	// LogEnableTimestamp 表示日志是否包含时间戳。
+	LogEnableTimestamp bool
+	// LogTickInterval 是计时日志输出间隔。
+	LogTickInterval int64
 }
 
-// CrudManager owns the *sql.DB handle for settings row reads + writes.
+// CrudManager 持有 settings 表读写的 *sql.DB 句柄。
 type CrudManager struct {
 	db *sql.DB
 }
 
-// NewCrudManager returns an empty CrudManager.  Mirrors
+// NewCrudManager 构造一个空的 CrudManager，调用方需在之后通过 SetDB 注入数据库句柄。
 // `CrudManager.init(allocator, null)`.
 func NewCrudManager() *CrudManager {
 	return &CrudManager{}
 }
 
-// SetDB attaches a *sql.DB.  Mirrors `crud_manager.db = self.db` in the
+// SetDB 为 CrudManager 注入 *sql.DB 句柄。
 // Zig SqliteManager.open.
 func (c *CrudManager) SetDB(db *sql.DB) { c.db = db }
 
@@ -68,7 +81,7 @@ func (c *CrudManager) SetDB(db *sql.DB) { c.db = db }
 // — preserved from the Zig source.
 const saveSettingsSQL = `INSERT OR REPLACE INTO settings (id, timezone, language, default_mode, theme_mode, wallpaper, duration_seconds, countdown_loop, countdown_loop_count, countdown_loop_interval, stopwatch_max_seconds, log_level, log_enable_timestamp, log_tick_interval) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
-// SaveSettings persists a SettingsConfig to the settings row.
+// SaveSettings 将 SettingsConfig 持久化到 settings 表的单行记录中。
 //
 // Mirrors `pub fn saveSettings(self, config)`.  Translation notes:
 //
@@ -115,7 +128,7 @@ func (c *CrudManager) SaveSettings(config domain.SettingsConfig) error {
 	return nil
 }
 
-// LoadSettings reads the settings row and returns a populated SettingsConfig.
+// LoadSettings 读取 settings 行并返回填充好的 SettingsConfig。
 //
 // Mirrors `pub fn loadSettings(self, allocator)`.  When no row exists, the
 // Zig source returns `SettingsConfig{}` (zero-valued); we return
@@ -185,7 +198,7 @@ func (c *CrudManager) LoadSettings() (domain.SettingsConfig, error) {
 	}, nil
 }
 
-// LoadSettingsRow returns the raw row view (kept for parity with Zig).
+// LoadSettingsRow 返回 settings 行的原始结构体视图。
 func (c *CrudManager) LoadSettingsRow() (SettingsRow, error) {
 	if c.db == nil {
 		return SettingsRow{}, ErrCrudNoDatabase

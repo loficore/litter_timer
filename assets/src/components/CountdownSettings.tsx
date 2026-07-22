@@ -1,3 +1,8 @@
+/**
+ * 倒计时设置组件
+ * 提供倒计时默认时长、循环开关、循环次数、循环间隔等配置项
+ */
+
 import { SettingItem } from "./SettingItem";
 import { TimeInput } from "./TimeInput";
 import { NumberInput } from "./NumberInput";
@@ -5,15 +10,22 @@ import { CheckboxInput } from "./CheckboxInput";
 import { t } from "../utils/i18n";
 
 interface CountdownSettingsProps {
+  /** 当前配置 */
   config: {
+    /** 倒计时总秒数 */
     duration_seconds: number;
+    /** 是否启用循环 */
     loop: boolean;
+    /** 循环次数（0 表示无限） */
     loop_count: number;
+    /** 循环间隔秒数 */
     loop_interval_seconds: number;
   };
+  /** 配置变化回调 */
   onChange: (config: any) => void;
   /** 当非倒计时模式时隐藏循环相关配置 */
   showLoopControls?: boolean;
+  /** 是否启用滑入动画 */
   isAnimated?: boolean;
 }
 

@@ -39,7 +39,7 @@ var tickCount atomic.Uint64
 // CountdownState — port of `const CountdownState = struct { … };`.
 // -----------------------------------------------------------------------------
 
-// CountdownState is the in-memory state for the countdown (timer) variant.
+// CountdownState 保存倒计时模式的内存运行状态。
 type CountdownState struct {
 	// DurationMs is the configured total duration in milliseconds.
 	DurationMs uint64
@@ -71,7 +71,7 @@ type CountdownState struct {
 	ElapsedAtPause int64
 }
 
-// Tick advances the countdown by deltaMs milliseconds. Mirrors the Zig
+// Tick 将倒计时推进 deltaMs 毫秒。
 // `CountdownState.tick(self, delta_ms)` exactly: guards on paused/finished,
 // handles negative/zero deltas, runs the rest-phase counter, then the main
 // counter with loop/rest rollover logic.
@@ -134,7 +134,7 @@ func (c *CountdownState) Tick(deltaMs int64) {
 // StopwatchState — port of `const StopwatchState = struct { … };`.
 // -----------------------------------------------------------------------------
 
-// StopwatchState is the in-memory state for the stopwatch (count-up) variant.
+// StopwatchState 保存正计时模式的内存运行状态。
 type StopwatchState struct {
 	// ElapsedMs is the live elapsed duration in milliseconds.
 	ElapsedMs int64
@@ -152,7 +152,7 @@ type StopwatchState struct {
 	ElapsedAtPause int64
 }
 
-// Tick advances the stopwatch by deltaMs milliseconds, capping at MaxMs.
+// Tick 将正计时推进 deltaMs 毫秒，到达 MaxMs 时封顶并标记完成。
 // Mirrors the Zig `StopwatchState.tick(self, delta_ms)`.
 func (s *StopwatchState) Tick(deltaMs int64) {
 	if s.IsPaused || s.IsFinished {
@@ -176,7 +176,7 @@ func (s *StopwatchState) Tick(deltaMs int64) {
 // ClockState — port of `pub const ClockState = union(ModeEnumT) { … };`.
 // -----------------------------------------------------------------------------
 
-// ClockState is the active-mode container. Exactly one of Countdown /
+// ClockState 保存当前计时模式及其对应状态。
 // Stopwatch is non-nil, matching the discriminant in Mode.
 type ClockState struct {
 	// Mode is the discriminant — keep in sync with whichever of Countdown or
@@ -188,7 +188,7 @@ type ClockState struct {
 	Stopwatch *StopwatchState
 }
 
-// GetTimeInfo returns the time-remaining (countdown) or time-elapsed
+// GetTimeInfo 返回当前秒级时间信息：倒计时为剩余秒数，正计时为已用秒数。
 // (stopwatch) as whole seconds. Mirrors `ClockState.getTimeInfo`.
 func (s *ClockState) GetTimeInfo() int64 {
 	switch s.Mode {
@@ -207,10 +207,10 @@ func (s *ClockState) GetTimeInfo() int64 {
 	}
 }
 
-// GetMode returns the active mode.
+// GetMode 返回当前激活的计时模式。
 func (s *ClockState) GetMode() ModeEnum { return s.Mode }
 
-// IsPaused returns whether the active state is paused.
+// IsPaused 返回当前状态是否处于暂停。
 func (s *ClockState) IsPaused() bool {
 	switch s.Mode {
 	case CountdownMode:
@@ -222,7 +222,7 @@ func (s *ClockState) IsPaused() bool {
 	}
 }
 
-// IsFinished returns whether the active state has finished.
+// IsFinished 返回当前状态是否已结束。
 func (s *ClockState) IsFinished() bool {
 	switch s.Mode {
 	case CountdownMode:
@@ -234,7 +234,7 @@ func (s *ClockState) IsFinished() bool {
 	}
 }
 
-// InRest returns whether the countdown is currently in its inter-loop rest.
+// InRest 返回倒计时是否处于循环间的休息阶段。正计时始终为 false。
 // Always false for stopwatch.
 func (s *ClockState) InRest() bool {
 	if s.Mode != CountdownMode || s.Countdown == nil {
@@ -243,7 +243,7 @@ func (s *ClockState) InRest() bool {
 	return s.Countdown.InRest
 }
 
-// GetRestRemainingTime returns the rest-phase remaining time in whole seconds.
+// GetRestRemainingTime 返回休息阶段剩余秒数。正计时始终返回 0。
 // Always 0 for stopwatch.
 func (s *ClockState) GetRestRemainingTime() int64 {
 	if s.Mode != CountdownMode || s.Countdown == nil {
@@ -252,7 +252,7 @@ func (s *ClockState) GetRestRemainingTime() int64 {
 	return s.Countdown.RestRemainingMs / 1000
 }
 
-// GetLoopRemaining returns the live loop counter; 0 = infinite.
+// GetLoopRemaining 返回实时剩余循环次数，0 表示无限循环。正计时始终返回 0。
 // Always 0 for stopwatch.
 func (s *ClockState) GetLoopRemaining() uint32 {
 	if s.Mode != CountdownMode || s.Countdown == nil {
@@ -261,7 +261,7 @@ func (s *ClockState) GetLoopRemaining() uint32 {
 	return s.Countdown.LoopRemaining
 }
 
-// GetLoopTotal returns the configured loop count; 0 = infinite.
+// GetLoopTotal 返回配置的循环总次数，0 表示无限循环。正计时始终返回 0。
 func (s *ClockState) GetLoopTotal() uint32 {
 	if s.Mode != CountdownMode || s.Countdown == nil {
 		return 0
@@ -269,7 +269,7 @@ func (s *ClockState) GetLoopTotal() uint32 {
 	return s.Countdown.LoopCount
 }
 
-// GetElapsedSeconds computes elapsed wall-clock time in whole seconds, using
+// GetElapsedSeconds 计算已用时间（整秒），按 `(now - start - paused) / 1000` 公式。
 // the same formula as the Zig source: `(now - start - paused) / 1000`.
 func (s *ClockState) GetElapsedSeconds() int64 {
 	now := NowMs()
@@ -291,7 +291,7 @@ func (s *ClockState) GetElapsedSeconds() int64 {
 	}
 }
 
-// GetRemainingSeconds computes wall-clock remaining time for the countdown;
+// GetRemainingSeconds 计算倒计时的实时剩余秒数，正计时返回 0。
 // returns 0 for stopwatch (no notion of "remaining").
 func (s *ClockState) GetRemainingSeconds() int64 {
 	if s.Mode != CountdownMode || s.Countdown == nil {
@@ -304,7 +304,7 @@ func (s *ClockState) GetRemainingSeconds() int64 {
 	return remainingMs / 1000
 }
 
-// GetCurrentRound returns the human-facing round number for a looped
+// GetCurrentRound 返回循环倒计时的当前轮次。正计时始终返回 0。
 // countdown (`loop_count - loop_remaining + 1`). Always 0 for stopwatch.
 func (s *ClockState) GetCurrentRound() int64 {
 	if s.Mode != CountdownMode || s.Countdown == nil {
@@ -317,7 +317,7 @@ func (s *ClockState) GetCurrentRound() int64 {
 // ClockManager — port of `pub const ClockManager = struct { … };`.
 // -----------------------------------------------------------------------------
 
-// ClockManager owns the current state, the initial-config snapshot used by
+// ClockManager 管理当前计时状态、复位用的初始配置快照以及事件通道。
 // reset, and the event channel used for asynchronous dispatch.
 //
 // State is guarded by `mu` because Run() mutates it on a consumer goroutine
@@ -337,7 +337,7 @@ type ClockManager struct {
 	closeOnce sync.Once
 }
 
-// NewClockManager builds (but does not start) a manager. Equivalent to the
+// NewClockManager 根据 ClockTaskConfig 构造（但不启动）一个 ClockManager。
 // Zig `ClockManager.init(clock_config)` path: it validates the duration
 // against i64 overflow and falls back to safe defaults if necessary.
 func NewClockManager(cfg ClockTaskConfig) *ClockManager {
@@ -364,19 +364,19 @@ func NewClockManager(cfg ClockTaskConfig) *ClockManager {
 	}
 }
 
-// Init is a no-op kept for symmetry with the spec'd lifecycle
+// Init 为兼容规范生命周期的空操作，实际构造在 NewClockManager 中完成。
 // (Init/Update/Deinit). Construction happens in NewClockManager; this exists
 // so callers that prefer an init-then-use pattern can call it without effect.
 func (m *ClockManager) Init() {}
 
-// Update returns a pointer to the current ClockState for read-only inspection.
+// Update 返回当前 ClockState 的指针，仅供只读检查使用。
 // Mirrors `ClockManager.update(self) *ClockState`. The pointer is valid only
 // until the next HandleEvent call; copy fields out if you need a stable view.
 // Callers in concurrent contexts must hold m.mu themselves — Update does NOT
 // hand back the lock with the pointer (the defer would release it on return).
 func (m *ClockManager) Update() *ClockState { return &m.state }
 
-// Deinit shuts down the event channel. Safe to call multiple times via
+// Deinit 关闭事件通道，使用 sync.Once 保证可安全重复调用。
 // sync.Once; tests may close the channel manually without `defer Deinit()`.
 func (m *ClockManager) Deinit() {
 	m.closeOnce.Do(func() {
@@ -386,11 +386,11 @@ func (m *ClockManager) Deinit() {
 	})
 }
 
-// Events returns the write side of the event bus. Producers (the tick
+// Events 返回事件总线的写入端，供生产方发送 ClockEvent。
 // goroutine in the http layer, user actions, etc.) push events here.
 func (m *ClockManager) Events() chan<- ClockEvent { return m.events }
 
-// Run drains the event bus until ctx is cancelled or the channel closes.
+// Run 持续消费事件总线，直到 ctx 取消或通道关闭。
 // Mirrors the spec's "HandleEvent selects on this channel" requirement. Holds
 // the state mutex around each event dispatch so concurrent readers of
 // Update() see consistent state.
@@ -410,7 +410,7 @@ func (m *ClockManager) Run(ctx context.Context, events <-chan ClockEvent) error 
 	}
 }
 
-// HandleEvent processes a single event synchronously, bypassing the channel.
+// HandleEvent 同步处理单个事件，绕过事件通道直接派发。
 // Useful in tests where races against the consumer goroutine would be a
 // problem, and useful in places where the producer already has the event in
 // hand. Holds the state mutex for the duration of the mutation.
@@ -441,13 +441,13 @@ func buildInitialState(cfg ClockTaskConfig) ClockState {
 		return ClockState{
 			Mode: CountdownMode,
 			Countdown: &CountdownState{
-				DurationMs:         durMs,
-				RemainingMs:        int64(durMs),
-				Loop:               cfg.Countdown.Loop,
+				DurationMs:          durMs,
+				RemainingMs:         int64(durMs),
+				Loop:                cfg.Countdown.Loop,
 				LoopIntervalSeconds: cfg.Countdown.LoopIntervalSeconds,
-				LoopCount:          cfg.Countdown.LoopCount,
-				LoopRemaining:      cfg.Countdown.LoopCount,
-				IsPaused:           true,
+				LoopCount:           cfg.Countdown.LoopCount,
+				LoopRemaining:       cfg.Countdown.LoopCount,
+				IsPaused:            true,
 			},
 		}
 	case StopwatchMode:

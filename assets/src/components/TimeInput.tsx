@@ -1,3 +1,8 @@
+/**
+ * 时间输入组件
+ * 以 HH:MM:SS 三个独立数字选择器组合输入总秒数
+ */
+
 import { memo } from "preact/compat";
 import type { FunctionalComponent } from "preact";
 import { useState, useEffect } from "preact/hooks";
@@ -5,13 +10,21 @@ import { PickerNumberInput } from "./PickerNumberInput";
 import { t } from "../utils/i18n";
 
 interface TimeInputProps {
+  /** 总秒数值（受控） */
   value: number;
+  /** 值变化回调，参数为新的总秒数 */
   onChange: (totalSeconds: number) => void;
+  /** 字段标签 */
   label?: string;
+  /** 小时部分允许的最大值 */
   maxHours?: number;
+  /** 是否显示小时选择器 */
   showHours?: boolean;
+  /** 是否显示分钟选择器 */
   showMinutes?: boolean;
+  /** 是否显示秒钟选择器 */
   showSeconds?: boolean;
+  /** 字段提示信息 */
   hint?: string;
 }
 

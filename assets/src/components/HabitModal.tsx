@@ -1,3 +1,8 @@
+/**
+ * 习惯/习惯组编辑弹窗组件
+ * 支持创建与编辑习惯或习惯组，包含名称、颜色、目标时长、壁纸
+ */
+
 import { useState, useEffect } from "preact/hooks";
 import type { FunctionalComponent } from "preact";
 import { APIClient } from "../utils/apiClient";
@@ -7,11 +12,17 @@ import { PickerNumberInput } from "./PickerNumberInput";
 import { t } from "../utils/i18n";
 
 interface HabitModalProps {
+  /** 是否显示弹窗 */
   isOpen: boolean;
+  /** 编辑模式："set" 编辑习惯组，"habit" 编辑习惯 */
   mode: "set" | "habit";
+  /** 编辑时的原始数据，新建时为 null */
   editData?: HabitSet | Habit | null;
+  /** 习惯所属的习惯组 id（仅创建习惯时使用） */
   setId?: number;
+  /** 关闭弹窗回调 */
   onClose: () => void;
+  /** 保存成功回调 */
   onSuccess: () => void;
 }
 

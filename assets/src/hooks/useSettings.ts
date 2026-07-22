@@ -16,42 +16,87 @@ import { t } from "../utils/i18n";
 import { logError } from "../utils/logger";
 import { STORAGE_KEYS } from "../utils/constants";
 
+/**
+ * 应用的基础设置。
+ */
 export interface BasicSettings {
+  /** 时区相对 UTC 的偏移小时数。 */
   timezone: number;
+  /** 界面语言。 */
   language: string;
+  /** 默认计时模式。 */
   default_mode: string;
+  /** 主题模式。 */
   theme_mode: string;
+  /** 壁纸设置。 */
   wallpaper?: string;
+  /** 是否启用声音。 */
   sound_enabled: boolean;
+  /** 是否启用计时提示音。 */
   sound_tick: boolean;
+  /** 是否启用完成提示音。 */
   sound_finish: boolean;
+  /** 提示音音量。 */
   sound_volume: number;
+  /** 布局密度。 */
   layout_density?: string;
+  /** 时间显示样式。 */
   time_display_style?: string;
+  /** 是否启用调试模式。 */
   debug_mode?: boolean;
 }
 
+/**
+ * 时钟默认配置。
+ */
 export interface ClockDefaults {
+  /** 倒计时默认配置。 */
   countdown: {
+    /** 默认倒计时时长，单位为秒。 */
     duration_seconds: number;
+    /** 是否循环倒计时。 */
     loop: boolean;
+    /** 默认循环次数。 */
     loop_count: number;
+    /** 循环间隔时长，单位为秒。 */
     loop_interval_seconds: number;
   };
+  /** 正计时默认配置。 */
   stopwatch: {
+    /** 正计时的最大时长，单位为秒。 */
     max_seconds: number;
   };
 }
 
+/**
+ * useSettings 返回的设置状态与操作方法。
+ */
 export interface UseSettingsReturn {
+  /** 当前应用基础设置。 */
   settings: BasicSettings;
+  /** 当前时钟默认配置。 */
   clockDefaults: ClockDefaults;
+  /** 当前音频偏好设置。 */
   audioPreferences: AudioPreferences;
+  /** 是否正在保存设置。 */
   isSaving: boolean;
+  /** 当前保存操作的提示信息。 */
   saveMessage: string;
+  /**
+   * 更新应用基础设置，未提供的字段保持不变。
+   *
+   * @param settings - 要更新的部分设置。
+   */
   updateSettings: (settings: Partial<BasicSettings>) => void;
+  /**
+   * 更新时钟默认配置，未提供的字段保持不变。
+   *
+   * @param defaults - 要更新的部分时钟配置。
+   */
   updateClockDefaults: (defaults: Partial<ClockDefaults>) => void;
+  /** 保存当前设置到本地和服务端。 */
   save: () => Promise<void>;
+  /** 将设置恢复为默认值。 */
   reset: () => void;
 }
 
@@ -93,6 +138,11 @@ const DEFAULT_CLOCK_DEFAULTS: ClockDefaults = {
   },
 };
 
+/**
+ * 管理应用设置、持久化保存和主题同步。
+ *
+ * @returns 应用设置状态及更新、保存、重置方法。
+ */
 export const useSettings = (): UseSettingsReturn => {
   const apiClientRef = useRef(getAPIClient());
   const [settings, setSettings] = useState<BasicSettings>(DEFAULT_SETTINGS);

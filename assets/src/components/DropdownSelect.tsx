@@ -1,19 +1,36 @@
+/**
+ * 自定义下拉选择组件
+ * 不依赖原生 select，实现点击外部关闭、键盘可达的浮层菜单
+ */
+
 import { useState, useRef, useEffect } from "preact/hooks";
 import type { FunctionalComponent } from "preact";
 import { t } from "../utils/i18n";
 
+/**
+ * 下拉选项
+ */
 interface DropdownOption {
+  /** 选项值 */
   value: string | number;
+  /** 选项显示文本 */
   label: string;
 }
 
 interface DropdownSelectProps {
+  /** 当前选中值 */
   value: string | number;
+  /** 可选选项列表 */
   options: DropdownOption[];
+  /** 值变化回调 */
   onChange: (value: string | number) => void;
+  /** 是否禁用 */
   disabled?: boolean;
+  /** 触发器与浮层的最小宽度（CSS 长度） */
   minWidth?: string;
+  /** 触发器按钮的 data-testid */
   dataTestId?: string;
+  /** 选项按钮的 data-testid（保留字段） */
   optionDataTestId?: string;
 }
 

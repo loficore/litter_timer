@@ -1,16 +1,33 @@
+/**
+ * 全局轻提示（Toast）模块
+ * 通过 showToast 触发，ToastContainer 监听后渲染 3 秒自动消失
+ */
+
 import type { FunctionalComponent } from "preact";
 import { useState, useEffect, useCallback } from "preact/hooks";
 
+/** Toast 类型 */
 export type ToastType = "success" | "error" | "info";
 
+/**
+ * 单条 Toast 数据
+ */
 interface Toast {
+  /** 唯一 id */
   id: number;
+  /** 提示文本 */
   message: string;
+  /** 类型 */
   type: ToastType;
 }
 
+/**
+ * 单条 Toast 渲染组件属性
+ */
 interface ToastItemProps {
+  /** Toast 数据 */
   toast: Toast;
+  /** 关闭回调 */
   onDismiss: (id: number) => void;
 }
 

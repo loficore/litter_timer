@@ -30,10 +30,7 @@ const sqliteDriverName = "sqlite3"
 // SqliteError mirrors `pub const SqliteError = error{...}`.
 // -----------------------------------------------------------------------------
 
-// SqliteError mirrors the union of all storage-layer errors.  We use a
-// single string type (Go convention) instead of a sealed enum; sub-modules
-// expose their own typed errors (MigrationError, CrudError, etc.) and the
-// manager methods bubble those through unchanged.
+// SqliteError 表示 SQLite 管理器可能返回的存储层错误。
 type SqliteError string
 
 const (
@@ -47,7 +44,7 @@ func (e SqliteError) Error() string { return string(e) }
 // SqliteManager — Go port of `pub const SqliteManager = struct {...}`.
 // -----------------------------------------------------------------------------
 
-// SqliteManager owns the *sql.DB and delegates to per-domain sub-managers.
+// SqliteManager 管理 SQLite 连接生命周期并协调各存储子模块。
 // Init() must be called before Open(); Open() must be called before any
 // CRUD method on a sub-manager.
 type SqliteManager struct {
@@ -64,13 +61,13 @@ type SqliteManager struct {
 	db *sql.DB // nil until Open() succeeds
 }
 
-// NewSqliteManager returns an uninitialised manager.  Call Init(dbPath) to
+// NewSqliteManager 构造一个未初始化的 SqliteManager。
 // set the path, then Open() to actually open the file.
 func NewSqliteManager() *SqliteManager {
 	return &SqliteManager{}
 }
 
-// Init stores the database path and constructs sub-managers.  Mirrors the
+// Init 设置数据库路径并构造各存储子模块。
 // Zig `pub fn init(allocator, db_path, backup_dir)` minus backup.
 //
 // `dbPath` may be absolute or relative; relative paths are resolved against
@@ -86,7 +83,7 @@ func (m *SqliteManager) Init(dbPath string) *SqliteManager {
 	return m
 }
 
-// Open creates the parent directory (if missing), opens the SQLite file
+// Open 打开 SQLite 数据库文件并完成子模块接线与初始化检查。
 // with `Create|ReadWrite`, hardens the file to 0600, enables foreign keys,
 // wires the *sql.DB into every sub-manager, and runs migration + health
 // check.  Idempotent: a second Open() is a no-op.
@@ -156,7 +153,7 @@ func (m *SqliteManager) Open() error {
 	return nil
 }
 
-// Migrate runs the migration check + table creation.  Mirrors the implicit
+// Migrate 执行迁移检查并按需建表。
 // `checkAndMigrate` call inside `SqliteManager.open` in Zig.
 func (m *SqliteManager) Migrate() error {
 	if m.db == nil {
@@ -165,7 +162,7 @@ func (m *SqliteManager) Migrate() error {
 	return m.migration.CheckAndMigrate()
 }
 
-// Close releases the *sql.DB.  Idempotent.  Mirrors `pub fn close(self)` —
+// Close 关闭底层 *sql.DB 并清空子模块的句柄引用。
 // in Go there is no separate "deinit"; close is enough.
 func (m *SqliteManager) Close() error {
 	if m.db == nil {
@@ -190,26 +187,26 @@ func (m *SqliteManager) Close() error {
 // in storage.go and by tests.
 // -----------------------------------------------------------------------------
 
-// DB returns the underlying *sql.DB.  Returns nil if not open.
+// DB 返回底层 *sql.DB，未打开时返回 nil。
 func (m *SqliteManager) DB() *sql.DB { return m.db }
 
-// Migration returns the migration sub-manager (for tests + advanced use).
+// Migration 返回迁移子模块。
 func (m *SqliteManager) Migration() *MigrationManager { return m.migration }
 
-// Health returns the health-check sub-manager.
+// Health 返回健康检查子模块。
 func (m *SqliteManager) Health() *HealthCheckManager { return m.health }
 
-// Crud returns the settings-row sub-manager.
+// Crud 返回 settings 行 CRUD 子模块。
 func (m *SqliteManager) Crud() *CrudManager { return m.crud }
 
-// HabitSets returns the habit_sets sub-manager.
+// HabitSets 返回 habit_sets 子模块。
 func (m *SqliteManager) HabitSets() *HabitSetCrud { return m.habitSets }
 
-// Habits returns the habits sub-manager.
+// Habits 返回 habits 子模块。
 func (m *SqliteManager) Habits() *HabitCrud { return m.habits }
 
-// Timers returns the timer-sessions sub-manager (sessions + timer_sessions).
+// Timers 返回 timer-sessions 子模块。
 func (m *SqliteManager) Timers() *TimerSessionCrud { return m.timers }
 
-// IsOpen reports whether the underlying *sql.DB is connected.
+// IsOpen 报告底层 *sql.DB 是否已连接。
 func (m *SqliteManager) IsOpen() bool { return m.db != nil }

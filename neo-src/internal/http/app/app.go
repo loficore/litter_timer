@@ -29,7 +29,7 @@ import (
 	"little-timer/internal/storage/backup"
 )
 
-// App is the HTTP-layer dependency bundle.
+// App 汇集 HTTP 处理器所需的应用依赖与运行时状态。
 //
 // One App per server process.  Constructed by the caller (currently the
 // server bootstrap in `cmd/server/main.go`) and passed to `NewRouter`.
@@ -42,22 +42,29 @@ type App struct {
 
 	// Clock + settings + DB — mirrors the Zig MainApplication fields
 	// of the same name.
-	Clock    *domain.ClockManager
+	// Clock 管理当前计时状态。
+	Clock *domain.ClockManager
+	// Settings 管理应用设置。
 	Settings *settings.SettingsManager
-	SQLite   *storage.SqliteManager
-	Backup   *backup.BackupManager
+	// SQLite 管理 SQLite 连接与存储子模块。
+	SQLite *storage.SqliteManager
+	// Backup 管理备份操作；未配置时可为 nil。
+	Backup *backup.BackupManager
 
 	// DBPath is captured at App construction so backup handlers can
 	// hand it to the adapter if needed.  Matches the Zig
 	// `app.settings_manager.sqlite_db.?.*.db_path` chain.
+	// DBPath 是数据库文件路径，供备份处理器使用。
 	DBPath string
 
 	// CurrentHabitID / CurrentTimerSessionID are the in-memory mirrors
 	// of `app.current_habit_id` / `app.current_timer_session_id`.  The
 	// Zig source resets these on `resetTimerSession`; the Go port does
 	// the same.
-	CurrentHabitID         *int64
-	CurrentTimerSessionID  *int64
+	// CurrentHabitID 是当前计时关联的习惯 ID。
+	CurrentHabitID *int64
+	// CurrentTimerSessionID 是当前计时会话 ID。
+	CurrentTimerSessionID *int64
 
 	// Secrets is the in-process master-password store.  Mirrors the
 	// Zig `SoftwareSecretImpl` / `SecretStorage`.  Lazily created by
@@ -65,7 +72,7 @@ type App struct {
 	secrets *crypto.SecretStorage
 }
 
-// NewApp builds an App with the supplied dependencies and default in-memory
+// NewApp 使用给定的依赖与默认内存状态构造一个 App。
 // state.  `dbPath` is captured so handlers that need the on-disk path
 // (currently only the backup handlers that build ad-hoc adapters) can
 // read it without re-deriving it from the SQLite manager.
@@ -91,16 +98,16 @@ func NewApp(
 // rather than hiding them behind helper methods so handlers stay explicit.
 // -----------------------------------------------------------------------------
 
-// Lock mirrors `app.mutex.lock()`.
+// Lock 获取 App 的写锁。
 func (a *App) Lock() { a.mu.Lock() }
 
-// Unlock mirrors `app.mutex.unlock()`.
+// Unlock 释放 App 的写锁。
 func (a *App) Unlock() { a.mu.Unlock() }
 
-// RLock mirrors a read-side lock; used by the SSE goroutine.
+// RLock 获取 App 的读锁，供 SSE 等只读消费者使用。
 func (a *App) RLock() { a.mu.RLock() }
 
-// RUnlock mirrors a read-side unlock.
+// RUnlock 释放 App 的读锁。
 func (a *App) RUnlock() { a.mu.RUnlock() }
 
 // -----------------------------------------------------------------------------
@@ -113,7 +120,7 @@ func (a *App) RUnlock() { a.mu.RUnlock() }
 // under the caller's mutex with no re-acquisition.
 // -----------------------------------------------------------------------------
 
-// CreateTimerSession inserts a new timer_sessions row and updates the
+// CreateTimerSession 插入一条 timer_sessions 行并更新内存中的当前会话指针。调用方必须持有 a.mu 写锁。
 // in-memory pointers.  Caller MUST hold a.mu (write).  Mirrors
 // `app.createTimerSession`.
 func (a *App) CreateTimerSession(habitID *int64, mode string, work, rest, loop int64) (int64, error) {
@@ -126,7 +133,7 @@ func (a *App) CreateTimerSession(habitID *int64, mode string, work, rest, loop i
 	return id, nil
 }
 
-// FinishTimerSession marks the current timer_session finished and
+// FinishTimerSession 将当前 timer_session 标记为结束并返回已用秒数。调用方必须持有 a.mu 写锁。
 // returns the elapsed seconds.  Caller MUST hold a.mu (write).  Mirrors
 // `app.finishTimerSession`.
 func (a *App) FinishTimerSession() (int64, error) {
@@ -141,7 +148,7 @@ func (a *App) FinishTimerSession() (int64, error) {
 	return state.GetElapsedSeconds(), nil
 }
 
-// ResetTimerSession clears the in-memory pointers and deletes the
+// ResetTimerSession 清除内存中的当前会话指针并删除对应的 timer_session 行。调用方必须持有 a.mu 写锁。
 // current timer_session row.  Caller MUST hold a.mu (write).  Mirrors
 // `app.resetTimerSession`.
 func (a *App) ResetTimerSession() {
@@ -153,7 +160,7 @@ func (a *App) ResetTimerSession() {
 	}
 }
 
-// LoadTimerProgress re-reads the most recent unfinished timer_session
+// LoadTimerProgress 重新读取最近未结束的 timer_session 到内存指针。调用方必须持有 a.mu 写锁。
 // into the in-memory pointers.  Caller MUST hold a.mu (write).  Mirrors
 // `app.loadTimerProgress`.
 func (a *App) LoadTimerProgress() {
@@ -169,7 +176,7 @@ func (a *App) LoadTimerProgress() {
 	}
 }
 
-// SaveProgressLocked persists the current clock state to the active
+// SaveProgressLocked 将当前时钟状态持久化到活动的 timer_session 行。调用方必须持有 a.mu 写锁。
 // timer_session row.  Caller MUST hold a.mu (write).  Mirrors
 // `app.saveTimerProgress`.
 func (a *App) SaveProgressLocked() {
@@ -219,7 +226,7 @@ func (a *App) ensureSecrets() *crypto.SecretStorage {
 	return a.secrets
 }
 
-// HasMasterPassword mirrors `app.settings_manager.hasMasterPassword`.
+// HasMasterPassword 返回是否已设置主密码（基于磁盘上的凭据或 BackupConfig 标志）。
 // Returns true when a master-password blob exists on disk OR the
 // BackupConfig row already says so.
 func (a *App) HasMasterPassword() bool {
@@ -230,7 +237,7 @@ func (a *App) HasMasterPassword() bool {
 	return a.ensureSecrets().HasMasterPassword()
 }
 
-// IsUnlocked mirrors `app.settings_manager.isUnlocked`.  Returns true
+// IsUnlocked 返回凭据是否已解锁且锁定期已过。
 // when the secrets store holds an unlocked master password AND the
 // lockout window has elapsed.
 func (a *App) IsUnlocked() bool {
@@ -241,7 +248,7 @@ func (a *App) IsUnlocked() bool {
 	return false
 }
 
-// UnlockCredentials mirrors `app.settings_manager.unlockCredentials`.
+// UnlockCredentials 使用给定密码解锁凭据并返回结构化结果。
 // Returns an UnlockResult JSON-friendly struct.  Always returns
 // `Success: true` when no master password is set (matches Zig).
 func (a *App) UnlockCredentials(password string) domain.UnlockResult {
@@ -266,7 +273,7 @@ func (a *App) UnlockCredentials(password string) domain.UnlockResult {
 	return domain.UnlockResult{Success: true, LockedUntil: 0}
 }
 
-// SetMasterPassword mirrors `app.settings_manager.setMasterPassword`.
+// SetMasterPassword 设置主密码并同步更新 BackupConfig 中的标志。
 // Persists the password via SecretStorage AND updates the BackupConfig
 // flag so the on-disk row matches.
 func (a *App) SetMasterPassword(password string) error {
@@ -284,7 +291,7 @@ func (a *App) SetMasterPassword(password string) error {
 	return a.Settings.UpdateBackupConfigFromJSON(backupConfigToJSON(cfg))
 }
 
-// GetMasterPasswordStatus mirrors
+// GetMasterPasswordStatus 返回主密码相关的状态信息。
 // `app.settings_manager.getMasterPasswordStatus`.
 func (a *App) GetMasterPasswordStatus() domain.MasterPasswordStatus {
 	cfg := a.Settings.BackupConfig()
@@ -296,7 +303,7 @@ func (a *App) GetMasterPasswordStatus() domain.MasterPasswordStatus {
 	}
 }
 
-// LockCredentials mirrors the body of `handleBackupLock` — sets the
+// LockCredentials 立即锁定凭据：将锁定期设为当前时间并清空内存中的密钥缓存。
 // lockout to "now+1s" and clears the in-memory secrets cache.
 func (a *App) LockCredentials() {
 	log.Info("LockCredentials: success")
@@ -310,7 +317,7 @@ func (a *App) LockCredentials() {
 // Auth helpers.
 // -----------------------------------------------------------------------------
 
-// GenerateToken returns a 32-byte random token encoded as base64.
+// GenerateToken 生成 32 字节随机令牌并以 base64 字符串形式返回。
 // Mirrors Zig `crypto.generateToken` (which returned a 64-char hex
 // string; base64 of 32 bytes is 44 chars — close enough for the auth
 // header format and far cheaper than hex encoding).
@@ -322,12 +329,12 @@ func GenerateToken() string {
 // Errors.
 // -----------------------------------------------------------------------------
 
-// errPasswordTooShort is returned by SetMasterPassword when the
+// errPasswordTooShort 在 SetMasterPassword 接收到不足 4 个字符的密码时返回。
 // supplied password is shorter than 4 characters.  Mirrors the Zig
 // `if (password_str.len < 4)` branch in handleSetMasterPassword.
 var errPasswordTooShort = &httpError{code: "password_too_short", message: "password too short (minimum 4 characters)"}
 
-// httpError is a tiny error type used internally for predictable
+// httpError 是供内部使用的轻量错误类型，便于在 JSON 响应中生成稳定的错误字符串。
 // `error.Error()` strings in JSON responses.
 type httpError struct {
 	code, message string

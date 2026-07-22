@@ -8,15 +8,25 @@ import type { FunctionalComponent } from "preact";
 import { t } from "../utils/i18n";
 
 interface TimerControlsProps {
+  /** 计时器是否正在运行 */
   isRunning: boolean;
+  /** 计时器是否已暂停 */
   isPaused: boolean;
+  /** 计时器是否已结束 */
   isFinished: boolean;
+  /** 是否为倒计时模式（倒计时才显示"跳过"按钮） */
   isCountdownMode: boolean;
+  /** 开始计时回调 */
   onStart: () => void;
+  /** 暂停回调 */
   onPause: () => void;
+  /** 继续回调 */
   onResume: () => void;
+  /** 重置回调 */
   onReset: () => void;
+  /** 跳过当前阶段回调（仅倒计时） */
   onSkip: () => void;
+  /** 结束计时回调 */
   onFinish: () => void;
 }
 

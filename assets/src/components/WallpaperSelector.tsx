@@ -1,3 +1,8 @@
+/**
+ * 壁纸选择控件组件
+ * 内嵌在表单中使用，支持渐变、纯色、图片三种壁纸类型
+ */
+
 import { useState, useEffect } from "preact/hooks";
 import type { FunctionalComponent } from "preact";
 import { t } from "../utils/i18n";
@@ -5,7 +10,9 @@ import { getAPIClient } from "../utils/apiClientSingleton";
 import { WALLPAPER_LOCAL_PREFIX } from "../utils/constants";
 
 interface WallpaperSelectorProps {
+  /** 当前壁纸值（渐变/颜色/图片 URL） */
   value: string;
+  /** 壁纸变更回调 */
   onChange: (wallpaper: string) => void;
 }
 

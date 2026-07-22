@@ -10,10 +10,15 @@ import { t } from "../utils/i18n";
 import type { Habit, HabitSet } from "../types/habit";
 
 interface HabitPickerProps {
+  /** 是否显示弹窗 */
   isOpen: boolean;
+  /** 习惯分组列表 */
   habitSets: HabitSet[];
+  /** 全部习惯列表 */
   habits: Habit[];
+  /** 关闭弹窗回调 */
   onClose: () => void;
+  /** 选中某个习惯的回调 */
   onSelect: (habitId: number) => void;
 }
 

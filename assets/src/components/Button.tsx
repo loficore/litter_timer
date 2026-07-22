@@ -1,3 +1,8 @@
+/**
+ * 通用按钮组件
+ * 支持多种 variant/size、加载态、图标、点击波纹动画
+ */
+
 import type { FunctionalComponent, ComponentChildren, VNode } from "preact";
 import { useState, useRef, useCallback } from "preact/hooks";
 
@@ -5,17 +10,29 @@ type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "success" | 
 type ButtonSize = "xs" | "sm" | "md" | "lg";
 
 interface ButtonProps {
+  /** 按钮主题变体 */
   variant?: ButtonVariant;
+  /** 按钮尺寸 */
   size?: ButtonSize;
+  /** 按钮图标（preact VNode） */
   icon?: VNode;
+  /** 是否禁用 */
   disabled?: boolean;
+  /** 是否处于加载态（显示旋转图标） */
   loading?: boolean;
+  /** 按钮内容 */
   children: ComponentChildren;
+  /** 点击回调 */
   onClick?: () => void;
+  /** 自定义 className */
   className?: string;
+  /** 鼠标悬浮提示 */
   title?: string;
+  /** 原生 button type */
   type?: "button" | "submit" | "reset";
+  /** 是否使用描边样式 */
   outline?: boolean;
+  /** 是否占满整行宽度 */
   block?: boolean;
 }
 

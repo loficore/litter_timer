@@ -1,16 +1,32 @@
+/**
+ * 标签页容器组件
+ * 上方为可切换的标签栏，下方为对应内容区域
+ */
+
 import type { ComponentChildren, VNode } from "preact";
 
+/**
+ * 单个标签配置
+ */
 interface Tab {
+  /** 标签唯一标识 */
   id: string;
+  /** 标签显示文本 */
   label: string;
+  /** 标签可选图标 */
   icon?: VNode | null | undefined;
 }
 
 interface TabPanelProps {
+  /** 标签列表 */
   tabs: Tab[];
+  /** 当前激活标签的 id */
   activeTab: string;
+  /** 切换标签回调 */
   onTabChange: (tabId: string) => void;
+  /** 标签页内容 */
   children: ComponentChildren;
+  /** 是否启用滑入动画 */
   isAnimated?: boolean;
 }
 

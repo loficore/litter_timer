@@ -20,7 +20,7 @@ import (
 	"little-timer/internal/http/middleware"
 )
 
-// NewRouter builds the full Gin router with every Zig route registered.
+// NewRouter 创建并注册全部 HTTP 路由的 Gin 引擎。
 // `corsOrigin` controls the Access-Control-Allow-Origin header; pass
 // "*" for development, the concrete origin in production.
 func NewRouter(a *app.App, corsOrigin string) *gin.Engine {
@@ -86,13 +86,13 @@ func registerHabits(r *gin.Engine) {
 	g.GET("/habits", handlers.HabitList)
 	g.POST("/habits", handlers.HabitCreate)
 	g.PUT("/habits/:id", handlers.HabitUpdate)
-  g.DELETE("/habits/:id", handlers.HabitDelete)
-    g.GET("/habits/:id/detail", handlers.HabitDetail)
-    g.GET("/habits/:id/stats", handlers.HabitStats)
+	g.DELETE("/habits/:id", handlers.HabitDelete)
+	g.GET("/habits/:id/detail", handlers.HabitDetail)
+	g.GET("/habits/:id/stats", handlers.HabitStats)
 
-    g.GET("/sessions", handlers.SessionList)
-    g.POST("/sessions", handlers.SessionCreate)
-    g.DELETE("/sessions/:id", handlers.SessionDelete)
+	g.GET("/sessions", handlers.SessionList)
+	g.POST("/sessions", handlers.SessionCreate)
+	g.DELETE("/sessions/:id", handlers.SessionDelete)
 
 	g.GET("/timer-sessions", handlers.TimerSessionList)
 	g.POST("/timer-sessions", handlers.TimerSessionCreate)

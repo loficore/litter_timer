@@ -1,3 +1,8 @@
+/**
+ * 错误边界组件，用于捕获子组件的 JavaScript 错误
+ * 同文件还导出 PageErrorBoundary 页面级错误边界（带自定义 fallback）
+ */
+
 import type { FunctionalComponent, ComponentChildren } from "preact";
 import { Component } from "preact";
 import { logError } from "../utils/logger";
@@ -7,8 +12,11 @@ import { t } from "../utils/i18n";
  * ErrorBoundary 组件属性
  */
 interface ErrorBoundaryProps {
+  /** 子节点 */
   children: ComponentChildren;
+  /** 自定义错误回退 UI */
   fallback?: ComponentChildren;
+  /** 错误捕获回调，用于上报或自定义处理 */
   onError?: (error: Error, errorInfo: { componentStack?: string }) => void;
 }
 
@@ -16,7 +24,9 @@ interface ErrorBoundaryProps {
  * ErrorBoundary 组件状态
  */
 interface ErrorBoundaryState {
+  /** 是否已捕获到错误 */
   hasError: boolean;
+  /** 捕获的错误对象 */
   error: Error | null;
 }
 
@@ -82,7 +92,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
  * PageErrorBoundary 组件属性
  */
 interface PageErrorBoundaryProps {
+  /** 页面内容 */
   children: ComponentChildren;
+  /** 自定义错误页标题 */
   title?: string;
 }
 

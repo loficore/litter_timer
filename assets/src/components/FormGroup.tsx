@@ -1,5 +1,6 @@
 import type { FunctionalComponent, ComponentChildren } from "preact";
 
+/** 表单分组布局方式 */
 type FormLayout = "vertical" | "horizontal";
 
 interface FormGroupProps {

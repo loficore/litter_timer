@@ -8,17 +8,28 @@ import type { FunctionalComponent } from "preact";
 import { PickerNumberInput } from "./PickerNumberInput";
 import { t } from "../utils/i18n";
 
+/**
+ * 计时器配置数据结构
+ */
 export interface TimerConfigData {
+  /** 当前模式 */
   mode: "stopwatch" | "countdown";
+  /** 工作时长（秒） */
   workDuration: number;
+  /** 休息时长（秒） */
   restDuration: number;
+  /** 循环轮次（0 表示无限循环） */
   loopCount: number;
 }
 
 interface TimerConfigProps {
+  /** 当前配置数据 */
   config: TimerConfigData;
+  /** 计时器是否正在运行（运行时隐藏该面板） */
   isRunning: boolean;
+  /** 是否为倒计时模式（仅倒计时模式显示配置） */
   isCountdownMode: boolean;
+  /** 配置变更回调（支持部分更新） */
   onChange: (config: Partial<TimerConfigData>) => void;
 }
 

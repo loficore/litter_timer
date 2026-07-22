@@ -8,23 +8,95 @@ import { getAPIClient } from "../utils/apiClientSingleton";
 import { logError } from "../utils/logger";
 import type { HabitSet, Habit, HabitWithProgress, HabitDetail } from "../types/habit";
 
+/**
+ * useHabits 返回的习惯数据状态和操作方法。
+ */
 export interface UseHabitsReturn {
+  /** 当前加载的习惯集列表。 */
   habitSets: HabitSet[];
+  /** 当前加载的习惯及其进度列表。 */
   habits: HabitWithProgress[];
+  /** 是否正在加载习惯数据。 */
   isLoading: boolean;
+  /** 最近一次加载失败的错误信息，未出错时为 null。 */
   error: string | null;
 
+  /** 重新加载习惯集和习惯数据。 */
   refresh: () => Promise<void>;
+  /**
+   * 创建习惯集。
+   *
+   * @param name - 习惯集名称。
+   * @param description - 习惯集描述。
+   * @param color - 习惯集颜色。
+   * @returns 创建成功的习惯集，失败时返回 null。
+   */
   createSet: (name: string, description: string, color: string) => Promise<HabitSet | null>;
+  /**
+   * 更新习惯集。
+   *
+   * @param id - 习惯集 ID。
+   * @param name - 更新后的名称。
+   * @param description - 更新后的描述。
+   * @param color - 更新后的颜色。
+   * @returns 更新完成的 Promise。
+   */
   updateSet: (id: number, name: string, description: string, color: string) => Promise<void>;
+  /**
+   * 删除习惯集。
+   *
+   * @param id - 要删除的习惯集 ID。
+   * @returns 删除完成的 Promise。
+   */
   deleteSet: (id: number) => Promise<void>;
+  /**
+   * 创建习惯。
+   *
+   * @param setId - 所属习惯集 ID。
+   * @param name - 习惯名称。
+   * @param goalSeconds - 目标时长，单位为秒。
+   * @param color - 习惯颜色。
+   * @returns 创建成功的习惯，失败时返回 null。
+   */
   createHabit: (setId: number, name: string, goalSeconds: number, color: string) => Promise<Habit | null>;
+  /**
+   * 更新习惯。
+   *
+   * @param id - 习惯 ID。
+   * @param name - 更新后的名称。
+   * @param goalSeconds - 更新后的目标时长，单位为秒。
+   * @param color - 更新后的颜色。
+   * @returns 更新完成的 Promise。
+   */
   updateHabit: (id: number, name: string, goalSeconds: number, color: string) => Promise<void>;
+  /**
+   * 删除习惯。
+   *
+   * @param id - 要删除的习惯 ID。
+   * @returns 删除完成的 Promise。
+   */
   deleteHabit: (id: number) => Promise<void>;
+  /**
+   * 获取指定习惯集下的习惯。
+   *
+   * @param setId - 习惯集 ID。
+   * @returns 该习惯集下的习惯及进度列表。
+   */
   getHabitsBySet: (setId: number) => HabitWithProgress[];
+  /**
+   * 获取习惯详情。
+   *
+   * @param habitId - 习惯 ID。
+   * @returns 习惯详情，获取失败时返回 null。
+   */
   getHabitDetail: (habitId: number) => Promise<HabitDetail | null>;
 }
 
+/**
+ * 管理习惯集、习惯及其今日进度数据。
+ *
+ * @returns 习惯数据状态及增删改查方法。
+ */
 export const useHabits = (): UseHabitsReturn => {
   const apiClientRef = useRef(getAPIClient());
   const [habitSets, setHabitSets] = useState<HabitSet[]>([]);

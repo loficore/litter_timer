@@ -1,12 +1,21 @@
+/**
+ * 主密码弹窗组件
+ * 用于首次设置主密码或解锁已加密的凭据存储
+ */
+
 import { useState } from "preact/hooks";
 import type { FunctionalComponent } from "preact";
 import { t } from "../utils/i18n";
 import { getAPIClient } from "../utils/apiClientSingleton";
 
 interface MasterPasswordModalProps {
+  /** 是否显示弹窗 */
   isOpen: boolean;
+  /** 模式："setup" 设置密码，"unlock" 解锁凭据 */
   mode: "setup" | "unlock";
+  /** 操作成功回调 */
   onSuccess: () => void;
+  /** 关闭弹窗回调 */
   onClose: () => void;
 }
 

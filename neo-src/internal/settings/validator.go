@@ -21,7 +21,8 @@ import (
 	"little-timer/internal/domain"
 )
 
-// ValidationError mirrors `pub const ValidationError = error{...}`.
+// ValidationError 对应 Zig 源码中的 `pub const ValidationError = error{...}`，
+// 是一个类型化哨兵错误，可通过 errors.Is / errors.As 进行匹配。
 type ValidationError string
 
 const (
@@ -66,21 +67,20 @@ const (
 	maxAuthTokenLen = 256
 )
 
-// Validator is a zero-value struct holding the validation rules.  Exists
-// for API discoverability — callers write `Validator.ValidateTimezone(tz)`
-// rather than reaching for a free function.
+// Validator 是零值结构体，集中存放各类校验规则。仅用于 API 命名空间——
+// 调用方使用 `Validator.ValidateTimezone(tz)` 而非包级自由函数。
 type Validator struct{}
 
-// New returns a Validator.  All state is in the type; the value is
-// stateless, but a constructor makes future extension (e.g. pluggable
-// rules) non-breaking.
+// NewValidator 返回一个 Validator 实例。状态全部由类型承载，值本身无状态，
+// 保留构造函数便于未来扩展（如可插拔规则）时保持 API 兼容。
 func NewValidator() Validator { return Validator{} }
 
 // -----------------------------------------------------------------------------
 // Range checks.
 // -----------------------------------------------------------------------------
 
-// ValidateTimezone accepts [-12, 14].  Mirrors `pub fn validateTimezone`.
+// ValidateTimezone 接受区间 [-12, 14] 的时区偏移。对应 Zig 中的
+// `pub fn validateTimezone`。
 func (Validator) ValidateTimezone(tz int8) error {
 	if tz < minTimezone || tz > maxTimezone {
 		return fmt.Errorf("%w: %d not in [%d, %d]",
@@ -89,8 +89,8 @@ func (Validator) ValidateTimezone(tz int8) error {
 	return nil
 }
 
-// ValidateLanguage accepts 1..10 characters.  Mirrors
-// `pub fn validateLanguage`.
+// ValidateLanguage 接受长度为 1..10 的语言代码。对应 Zig 中的
+// `pub fn validateLanguage`。
 func (Validator) ValidateLanguage(lang string) error {
 	if len := len(lang); len < minLanguageLen || len > maxLanguageLen {
 		return fmt.Errorf("%w: length %d not in [%d, %d]",
@@ -99,7 +99,8 @@ func (Validator) ValidateLanguage(lang string) error {
 	return nil
 }
 
-// ValidateDuration accepts [1, 86400].  Mirrors `pub fn validateDuration`.
+// ValidateDuration 接受区间 [1, 86400] 秒的时长。对应 Zig 中的
+// `pub fn validateDuration`。
 func (Validator) ValidateDuration(seconds uint64) error {
 	if seconds < minDurationSec || seconds > maxDurationSec {
 		return fmt.Errorf("%w: %d not in [%d, %d]",
@@ -108,7 +109,7 @@ func (Validator) ValidateDuration(seconds uint64) error {
 	return nil
 }
 
-// ValidateLoopCount accepts [0, 1000].  0 means "infinite".
+// ValidateLoopCount 接受区间 [0, 1000] 的循环次数，0 表示无限循环。
 func (Validator) ValidateLoopCount(count uint32) error {
 	if count > maxLoopCount {
 		return fmt.Errorf("%w: %d > %d",
@@ -117,7 +118,8 @@ func (Validator) ValidateLoopCount(count uint32) error {
 	return nil
 }
 
-// ValidateLoopInterval accepts [0, 3600].  Mirrors `pub fn validateLoopInterval`.
+// ValidateLoopInterval 接受区间 [0, 3600] 秒的循环间隔。对应 Zig 中的
+// `pub fn validateLoopInterval`。
 func (Validator) ValidateLoopInterval(seconds uint64) error {
 	if seconds > maxLoopInterval {
 		return fmt.Errorf("%w: %d > %d",
@@ -126,8 +128,8 @@ func (Validator) ValidateLoopInterval(seconds uint64) error {
 	return nil
 }
 
-// ValidateMaxSeconds accepts (0, 31_536_000].  Mirrors
-// `pub fn validateMaxSeconds`.
+// ValidateMaxSeconds 接受区间 (0, 31_536_000] 秒的最大值。对应 Zig 中的
+// `pub fn validateMaxSeconds`。
 func (Validator) ValidateMaxSeconds(maxSeconds uint64) error {
 	if maxSeconds < minMaxSeconds || maxSeconds > maxMaxSeconds {
 		return fmt.Errorf("%w: %d not in (%d, %d]",
@@ -136,7 +138,7 @@ func (Validator) ValidateMaxSeconds(maxSeconds uint64) error {
 	return nil
 }
 
-// ValidateTickInterval accepts [100, 5000] ms.
+// ValidateTickInterval 接受区间 [100, 5000] 毫秒的滴答间隔。
 func (Validator) ValidateTickInterval(intervalMs int64) error {
 	if intervalMs < minTickIntervalMs || intervalMs > maxTickIntervalMs {
 		return fmt.Errorf("%w: %d not in [%d, %d]",
@@ -145,7 +147,7 @@ func (Validator) ValidateTickInterval(intervalMs int64) error {
 	return nil
 }
 
-// ValidatePresetName accepts 1..64 characters.
+// ValidatePresetName 接受长度为 1..64 字符的预设名称。
 func (Validator) ValidatePresetName(name string) error {
 	if len := len(name); len == 0 || len > maxPresetNameLen {
 		return fmt.Errorf("%w: length %d not in [1, %d]",
@@ -154,7 +156,7 @@ func (Validator) ValidatePresetName(name string) error {
 	return nil
 }
 
-// ValidatePresetCount accepts [0, 999].
+// ValidatePresetCount 接受区间 [0, 999] 的预设数量。
 func (Validator) ValidatePresetCount(count int) error {
 	if count > maxPresetCount {
 		return fmt.Errorf("%w: %d > %d",
@@ -163,7 +165,7 @@ func (Validator) ValidatePresetCount(count int) error {
 	return nil
 }
 
-// ValidateAuthToken accepts [32, 256] characters.
+// ValidateAuthToken 接受长度为 [32, 256] 字符的认证令牌。
 func (Validator) ValidateAuthToken(token string) error {
 	if len := len(token); len < minAuthTokenLen || len > maxAuthTokenLen {
 		return fmt.Errorf("%w: length %d not in [%d, %d]",
@@ -176,8 +178,8 @@ func (Validator) ValidateAuthToken(token string) error {
 // Safe conversions — `safeXFromJson` ports.
 // -----------------------------------------------------------------------------
 
-// SafeI8FromJson mirrors `pub fn safeI8FromJson` — returns nil if the
-// JSON-supplied integer falls outside [min, max] or doesn't fit in int8.
+// SafeI8FromJson 对应 Zig 中的 `pub fn safeI8FromJson`：当 JSON 传入的整数
+// 超出 [min, max] 区间或无法放入 int8 时返回 nil。
 func (Validator) SafeI8FromJson(jsonInt int64, min, max int8) *int8 {
 	if jsonInt < int64(min) || jsonInt > int64(max) {
 		return nil
@@ -186,8 +188,8 @@ func (Validator) SafeI8FromJson(jsonInt int64, min, max int8) *int8 {
 	return &v
 }
 
-// SafeU32FromJson mirrors `pub fn safeU32FromJson` — rejects negatives
-// and values > max.
+// SafeU32FromJson 对应 Zig 中的 `pub fn safeU32FromJson`：拒绝负数以及
+// 大于 max 的值。
 func (Validator) SafeU32FromJson(jsonInt int64, max uint32) *uint32 {
 	if jsonInt < 0 || jsonInt > int64(max) {
 		return nil
@@ -196,7 +198,7 @@ func (Validator) SafeU32FromJson(jsonInt int64, max uint32) *uint32 {
 	return &v
 }
 
-// SafeU64FromJson mirrors `pub fn safeU64FromJson`.
+// SafeU64FromJson 对应 Zig 中的 `pub fn safeU64FromJson`。
 func (Validator) SafeU64FromJson(jsonInt, min, max uint64) *uint64 {
 	if jsonInt < min || jsonInt > max {
 		return nil
@@ -204,7 +206,7 @@ func (Validator) SafeU64FromJson(jsonInt, min, max uint64) *uint64 {
 	return &jsonInt
 }
 
-// SafeI64FromJson mirrors `pub fn safeI64FromJson`.
+// SafeI64FromJson 对应 Zig 中的 `pub fn safeI64FromJson`。
 func (Validator) SafeI64FromJson(jsonInt, min, max int64) *int64 {
 	if jsonInt < min || jsonInt > max {
 		return nil
@@ -218,36 +220,36 @@ func (Validator) SafeI64FromJson(jsonInt, min, max int64) *int64 {
 
 var defaultValidator = NewValidator()
 
-// ValidateTimezone wraps the package-level validator.
+// ValidateTimezone 包级便捷函数，内部转发到默认 Validator 实例。
 func ValidateTimezone(tz int8) error { return defaultValidator.ValidateTimezone(tz) }
 
-// ValidateLanguage wraps the package-level validator.
+// ValidateLanguage 包级便捷函数，内部转发到默认 Validator 实例。
 func ValidateLanguage(lang string) error { return defaultValidator.ValidateLanguage(lang) }
 
-// ValidateDuration wraps the package-level validator.
+// ValidateDuration 包级便捷函数，内部转发到默认 Validator 实例。
 func ValidateDuration(seconds uint64) error { return defaultValidator.ValidateDuration(seconds) }
 
-// ValidateLoopCount wraps the package-level validator.
+// ValidateLoopCount 包级便捷函数，内部转发到默认 Validator 实例。
 func ValidateLoopCount(count uint32) error { return defaultValidator.ValidateLoopCount(count) }
 
-// ValidateLoopInterval wraps the package-level validator.
+// ValidateLoopInterval 包级便捷函数，内部转发到默认 Validator 实例。
 func ValidateLoopInterval(seconds uint64) error { return defaultValidator.ValidateLoopInterval(seconds) }
 
-// ValidateMaxSeconds wraps the package-level validator.
+// ValidateMaxSeconds 包级便捷函数，内部转发到默认 Validator 实例。
 func ValidateMaxSeconds(maxSeconds uint64) error {
 	return defaultValidator.ValidateMaxSeconds(maxSeconds)
 }
 
-// ValidateTickInterval wraps the package-level validator.
+// ValidateTickInterval 包级便捷函数，内部转发到默认 Validator 实例。
 func ValidateTickInterval(intervalMs int64) error {
 	return defaultValidator.ValidateTickInterval(intervalMs)
 }
 
-// ValidatePresetName wraps the package-level validator.
+// ValidatePresetName 包级便捷函数，内部转发到默认 Validator 实例。
 func ValidatePresetName(name string) error { return defaultValidator.ValidatePresetName(name) }
 
-// ValidatePresetCount wraps the package-level validator.
+// ValidatePresetCount 包级便捷函数，内部转发到默认 Validator 实例。
 func ValidatePresetCount(count int) error { return defaultValidator.ValidatePresetCount(count) }
 
-// ValidateAuthToken wraps the package-level validator.
+// ValidateAuthToken 包级便捷函数，内部转发到默认 Validator 实例。
 func ValidateAuthToken(token string) error { return defaultValidator.ValidateAuthToken(token) }

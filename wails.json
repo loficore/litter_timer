@@ -1,9 +1,0 @@
-{
-  "name": "LittleTimer",
-  "version": "1.0.0",
-  "APP_ID": "com.littletimer",
-  "NDKVersion": "26.3.11579264",
-  "frontend": "assets",
-  "devServerPort": 5173,
-  "outputType": "mobile"
-}

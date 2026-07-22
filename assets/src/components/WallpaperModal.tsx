@@ -1,3 +1,8 @@
+/**
+ * 壁纸选择弹窗组件
+ * 支持纯色与图片两种壁纸，提供 URL 输入、上传、删除本地图片等能力
+ */
+
 import { useState, useEffect } from "preact/hooks";
 import type { FunctionalComponent } from "preact";
 import { t } from "../utils/i18n";
@@ -5,15 +10,22 @@ import { getAPIClient } from "../utils/apiClientSingleton";
 import { WALLPAPER_LOCAL_PREFIX, resolveWallpaperUrl } from "../utils/constants";
 
 interface WallpaperModalProps {
+  /** 是否显示弹窗 */
   isOpen: boolean;
+  /** 当前壁纸值（颜色字符串或图片 URL） */
   value: string;
+  /** 关闭弹窗回调 */
   onClose: () => void;
+  /** 壁纸变更回调 */
   onChange: (wallpaper: string) => void;
 }
 
+/** 壁纸类型：纯色或图片 */
 type WallpaperType = "solid" | "image";
 
+/** 本地已上传图片 */
 interface LocalImage {
+  /** 图片文件名 */
   name: string;
 }
 

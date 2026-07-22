@@ -1,12 +1,21 @@
+/**
+ * 秒表设置组件
+ * 提供秒表最大计时时长配置
+ */
+
 import { SettingItem } from "./SettingItem";
 import { NumberInput } from "./NumberInput";
 import { t } from "../utils/i18n";
 
 interface StopwatchSettingsProps {
+  /** 当前配置 */
   config: {
+    /** 秒表最大允许秒数 */
     max_seconds: number;
   };
+  /** 是否启用滑入动画 */
   isAnimated?: boolean;
+  /** 配置变化回调 */
   onChange: (config: any) => void;
 }
 

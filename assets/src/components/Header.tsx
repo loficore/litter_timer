@@ -1,3 +1,8 @@
+/**
+ * 顶部导航栏组件
+ * 提供标题、设置/统计/返回按钮的统一入口
+ */
+
 import type { FunctionalComponent } from "preact";
 import { t } from "../utils/i18n";
 import { ArrowLeftIconComponent, SettingsIcon, ChartIcon } from "../utils/icons";

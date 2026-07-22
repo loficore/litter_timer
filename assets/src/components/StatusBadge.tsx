@@ -1,5 +1,11 @@
+/**
+ * 状态徽章组件 - Material You 风格
+ * 根据计时器状态显示对应颜色与"运行中"小圆点
+ */
+
 import type { FunctionalComponent } from "preact";
 
+/** 计时器状态类型 */
 type StatusType = "running" | "paused" | "finished";
 
 interface StatusBadgeProps {

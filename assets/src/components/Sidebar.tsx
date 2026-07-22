@@ -1,3 +1,8 @@
+/**
+ * 侧边栏导航组件
+ * 展示应用主要页面（计时、习惯、统计、设置）的入口
+ */
+
 import type { FunctionalComponent } from "preact";
 import { t } from "../utils/i18n";
 import { StarIconComponent } from "../utils/icons";
@@ -5,7 +10,9 @@ import { StarIconComponent } from "../utils/icons";
 type Page = "timer" | "habits" | "stats" | "settings";
 
 interface SidebarProps {
+    /** 当前所在页面 */
     currentPage: Page;
+    /** 切换页面回调 */
     onNavigate: (page: Page) => void;
 }
 

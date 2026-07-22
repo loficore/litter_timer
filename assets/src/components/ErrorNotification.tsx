@@ -1,10 +1,19 @@
+/**
+ * 顶部错误通知组件
+ * 显示一条错误消息，5 秒后自动消失，可手动关闭
+ * 同文件内还导出 OfflineModeIndicator 离线提示横幅
+ */
+
 import type { FunctionalComponent } from "preact";
 import { useState, useEffect } from "preact/hooks";
 import { t } from "../utils/i18n";
 
 interface ErrorNotificationProps {
+  /** 是否显示通知 */
   visible?: boolean;
+  /** 错误消息内容 */
   message?: string;
+  /** 关闭通知回调 */
   onDismiss?: () => void;
 }
 

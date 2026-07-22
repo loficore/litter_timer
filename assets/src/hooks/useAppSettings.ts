@@ -8,22 +8,67 @@ import { getAPIClient } from "../utils/apiClientSingleton";
 import { STORAGE_KEYS } from "../utils/constants";
 import { logError } from "../utils/logger";
 
+/**
+ * 应用中跨组件共享的设置。
+ */
 export interface AppSettings {
+  /** 主题模式。 */
   theme_mode: string;
+  /** 壁纸内容或地址。 */
   wallpaper: string;
+  /** 布局密度。 */
   layout_density: string;
+  /** 时间显示样式。 */
   time_display_style: string;
+  /** 浅色主题样式。 */
   light_style: string;
 }
 
+/**
+ * useAppSettings 返回的共享设置状态与操作方法。
+ */
 export interface UseAppSettingsReturn {
+  /** 当前应用共享设置。 */
   settings: AppSettings;
+  /** 是否正在加载设置。 */
   isLoading: boolean;
+  /**
+   * 应用主题模式。
+   *
+   * @param themeMode - 主题模式，未传入时使用深色主题。
+   */
   applyTheme: (themeMode?: string) => void;
+  /**
+   * 应用浅色主题样式。
+   *
+   * @param lightStyle - 浅色主题样式，未传入时使用纸张样式。
+   */
   applyLightStyle: (lightStyle?: string) => void;
+  /**
+   * 更新共享设置，未提供的字段保持不变。
+   *
+   * @param settings - 要更新的部分设置。
+   */
   updateSettings: (settings: Partial<AppSettings>) => void;
+  /**
+   * 规范化壁纸值。
+   *
+   * @param value - 待处理的壁纸值。
+   * @returns 去除首尾空白后的字符串，非字符串值返回空字符串。
+   */
   normalizeWallpaper: (value: unknown) => string;
+  /**
+   * 校验壁纸地址是否为允许的格式。
+   *
+   * @param url - 待校验的壁纸地址。
+   * @returns 允许的地址，格式不符合要求时返回空字符串。
+   */
   sanitizeWallpaperUrl: (url: string) => string;
+  /**
+   * 获取当前壁纸的样式信息。
+   *
+   * @returns 壁纸类型及值，没有壁纸时返回 null。
+   */
   getWallpaperStyle: () => { type: "gradient" | "color" | "image"; value: string } | null;
 }
 
@@ -109,6 +154,11 @@ export const sanitizeWallpaperUrl = (url: string): string => {
   return "";
 };
 
+/**
+ * 管理跨组件共享的主题、壁纸和布局设置。
+ *
+ * @returns 共享设置状态及主题、壁纸相关操作方法。
+ */
 export const useAppSettings = (): UseAppSettingsReturn => {
   const apiClientRef = useRef(getAPIClient());
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);

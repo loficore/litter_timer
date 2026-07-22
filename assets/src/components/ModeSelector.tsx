@@ -1,3 +1,8 @@
+/**
+ * 模式选择器组件
+ * 以网格按钮形式展示可选模式并支持切换
+ */
+
 import type { FunctionalComponent, VNode } from "preact";
 import { Mode } from "../utils/share";
 

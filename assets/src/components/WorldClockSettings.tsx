@@ -1,9 +1,16 @@
+/**
+ * 世界时钟设置组件
+ * 提供时区下拉选择，用于世界时钟模式显示对应时区时间
+ */
+
 import { SettingItem } from "./SettingItem";
 import { SelectInput } from "./SelectInput";
 import { t } from "../utils/i18n";
 
 interface WorldClockSettingsProps {
+  /** 当前时区偏移量 */
   timezone: number;
+  /** 时区变化回调 */
   onTimezoneChange: (tz: number) => void;
 }
 

@@ -1,15 +1,29 @@
+/**
+ * 数字选择器组件
+ * 数字输入框 + 上下箭头按钮组合，支持键盘输入与点击步进
+ */
+
 import { memo } from "preact/compat";
 import type { FunctionalComponent } from "preact";
 
 interface PickerNumberInputProps {
+  /** 当前数值 */
   value: number;
+  /** 允许的最小值 */
   min?: number;
+  /** 允许的最大值 */
   max?: number;
+  /** 值变化回调 */
   onChange: (value: number) => void;
+  /** 字段标签 */
   label?: string;
+  /** 单位文本（如 "分钟"） */
   unit?: string;
+  /** 字段提示信息 */
   hint?: string;
+  /** 是否禁用 */
   disabled?: boolean;
+  /** 输入框 data-testid */
   dataTestId?: string;
 }
 

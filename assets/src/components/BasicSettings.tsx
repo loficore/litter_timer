@@ -1,3 +1,8 @@
+/**
+ * 基础设置组件
+ * 提供时区、语言、默认模式、主题、声音、调试等通用设置项
+ */
+
 import { SettingItem } from "./SettingItem";
 import { SelectInput } from "./SelectInput";
 import { t } from "../utils/i18n";
@@ -5,23 +10,40 @@ import { setPerfDebugEnabled } from "../utils/logger";
 import { useState, useEffect } from "preact/hooks";
 
 interface BasicSettingsProps {
+  /** 当前设置配置对象 */
   config: {
+    /** 时区偏移量（小时，-12 ~ +14） */
     timezone: number;
+    /** 语言代码 */
     language: string;
+    /** 启动时默认进入的模式 */
     default_mode: string;
+    /** 主题模式 */
     theme_mode: string;
+    /** 当前壁纸标识 */
     wallpaper?: string;
+    /** 是否启用声音 */
     sound_enabled: boolean;
+    /** 是否启用滴答声 */
     sound_tick: boolean;
+    /** 是否启用结束提示音 */
     sound_finish: boolean;
+    /** 声音音量（0-100） */
     sound_volume: number;
+    /** 布局密度 */
     layout_density?: string;
+    /** 时间显示样式 */
     time_display_style?: string;
+    /** 浅色主题样式 */
     light_style?: string;
+    /** 是否启用调试模式 */
     debug_mode?: boolean;
   };
+  /** 是否启用滑入动画 */
   isAnimated?: boolean;
+  /** 点击壁纸选择按钮的回调 */
   onWallpaperClick?: () => void;
+  /** 配置变化回调 */
   onChange: (config: any) => void;
 }
 

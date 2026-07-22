@@ -9,16 +9,26 @@ import { formatDuration, calculateProgress } from "../utils/formatters";
 import { StarIconComponent } from "../utils/icons";
 import { useEffect, useState } from "preact/hooks";
 
+/**
+ * 习惯详情数据
+ */
 interface HabitDetailData {
+  /** 今日累计秒数 */
   today_seconds: number;
+  /** 目标秒数 */
   goal_seconds: number;
+  /** 连续坚持天数 */
   streak: number;
 }
 
 interface TimerProgressProps {
+  /** 当前习惯详情，未选习惯时为 null */
   habitDetail: HabitDetailData | null;
+  /** 当前会话已计时秒数 */
   elapsedSeconds: number;
+  /** 当前会话是否已结束 */
   isFinished: boolean;
+  /** 是否为秒表模式（仅秒表模式显示该组件） */
   isStopwatchMode: boolean;
 }
 
