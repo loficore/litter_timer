@@ -83,11 +83,21 @@ export const WallpaperModal: FunctionalComponent<WallpaperModalProps> = ({
 
   const handleImageUrlChange = (url: string) => {
     setImageUrl(url);
-    if (url.trim()) {
-      setPreviewLoading(true);
-      onChange(url.trim());
-    } else {
-      onChange("");
+  };
+
+  const handleSubmitUrl = async () => {
+    const url = imageUrl.trim();
+    if (!url) return;
+    setPreviewLoading(true);
+    setUploadError(null);
+    try {
+      const result = await api.fetchWallpaperByUrl(url);
+      onChange(`${WALLPAPER_LOCAL_PREFIX}${result.filename}`);
+      setLocalImages((prev) => [...prev, { name: result.filename }]);
+    } catch {
+      setUploadError(t("modal.upload_fail"));
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -113,7 +123,7 @@ export const WallpaperModal: FunctionalComponent<WallpaperModalProps> = ({
       setImageUrl(result.filename);
       setLocalImages((prev) => [...prev, { name: result.filename }]);
     } catch {
-      setUploadError(t("modal.upload_fail") || "Upload failed");
+      setUploadError(t("modal.upload_fail"));
     } finally {
       setUploading(false);
       input.value = "";
@@ -149,13 +159,10 @@ export const WallpaperModal: FunctionalComponent<WallpaperModalProps> = ({
     if (wallpaperType === "solid") {
       return "";
     }
-    if (isLocal) {
-      return `/api/wallpapers/${imageUrl}`;
-    }
-    return imageUrl;
+    return resolveWallpaperUrl(value);
   };
 
-  const showPreview = wallpaperType === "image" && imageUrl && !previewLoading;
+  const showPreview = wallpaperType === "image" && (isLocal || isImage) && !previewLoading;
 
   const getBackdropImageUrl = (): string => {
     if (isColor) return "";
@@ -302,7 +309,7 @@ export const WallpaperModal: FunctionalComponent<WallpaperModalProps> = ({
                   <div className="relative rounded-lg overflow-hidden bg-[var(--my-surface-strong)] border border-[var(--my-outline)]">
                     <img
                       src={getPreviewUrl()}
-                      alt="preview"
+                      alt={t("modal.preview")}
                       className="w-full h-40 object-cover"
                       onLoad={handleImageLoad}
                       onError={handleImageError}
@@ -324,18 +331,32 @@ export const WallpaperModal: FunctionalComponent<WallpaperModalProps> = ({
                 <label className="text-sm text-[var(--my-on-surface-variant)] mb-1 block">
                   {t("modal.image_url")}
                 </label>
-                <input
-                  type="text"
-                  className="my-input w-full text-sm"
-                  placeholder={t("modal.enter_url")}
-                  value={isLocal ? "" : imageUrl}
-                  onInput={(e) => handleImageUrlChange((e.target as HTMLInputElement).value)}
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    className="my-input flex-1 text-sm"
+                    placeholder={t("modal.enter_url")}
+                    value={isLocal ? "" : imageUrl}
+                    onInput={(e) => handleImageUrlChange((e.target as HTMLInputElement).value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        void handleSubmitUrl();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline"
+                    onClick={() => { void handleSubmitUrl(); }}
+                  >
+                    {t("modal.add")}
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
                 <label className="btn btn-sm btn-outline cursor-pointer">
-                  {uploading ? (t("modal.upload_progress") || "Uploading...") : (t("modal.upload_image") || "Upload")}
+                  {uploading ? t("modal.upload_progress") : t("modal.upload_image")}
                   <input
                     type="file"
                     accept="image/*"

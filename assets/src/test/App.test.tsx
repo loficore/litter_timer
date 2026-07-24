@@ -28,6 +28,7 @@ vi.mock("../utils/constants", () => ({
     WALLPAPER: "lt_wallpaper",
     WALLPAPER_DEBUG: "lt_wallpaper_debug",
   },
+  resolveWallpaperUrl: vi.fn((value: string) => value),
 }));
 
 vi.mock("../components/Sidebar", () => ({

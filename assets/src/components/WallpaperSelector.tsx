@@ -7,7 +7,7 @@ import { useState, useEffect } from "preact/hooks";
 import type { FunctionalComponent } from "preact";
 import { t } from "../utils/i18n";
 import { getAPIClient } from "../utils/apiClientSingleton";
-import { WALLPAPER_LOCAL_PREFIX } from "../utils/constants";
+import { WALLPAPER_LOCAL_PREFIX, resolveWallpaperUrl } from "../utils/constants";
 
 interface WallpaperSelectorProps {
   /** 当前壁纸值（渐变/颜色/图片 URL） */
@@ -87,8 +87,21 @@ export const WallpaperSelector: FunctionalComponent<WallpaperSelectorProps> = ({
 
   const handleImageUrlChange = (url: string) => {
     setImageUrl(url);
-    if (url.trim()) {
-      onChange(url.trim());
+  };
+
+  const handleSubmitUrl = async () => {
+    const url = imageUrl.trim();
+    if (!url) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const result = await api.fetchWallpaperByUrl(url);
+      onChange(`local:${result.filename}`);
+      setLocalImages(prev => [...prev, { name: result.filename }]);
+    } catch {
+      setUploadError(t("modal.upload_fail"));
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -105,7 +118,7 @@ export const WallpaperSelector: FunctionalComponent<WallpaperSelectorProps> = ({
       onChange(localValue);
       setLocalImages((prev) => [...prev, { name: result.filename }]);
     } catch {
-      setUploadError(t("upload_fail") || "Upload failed");
+      setUploadError(t("modal.upload_fail"));
     } finally {
       setUploading(false);
       input.value = "";
@@ -207,16 +220,32 @@ export const WallpaperSelector: FunctionalComponent<WallpaperSelectorProps> = ({
 
       {wallpaperType === "image" && (
         <div className="space-y-2">
-          <input
-            type="text"
-            className="my-input w-full text-sm"
-            placeholder={t("modal.image_url_placeholder")}
-            value={isLocal ? "" : imageUrl}
-            onInput={(e) => handleImageUrlChange((e.target as HTMLInputElement).value)}
-          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              className="my-input flex-1 text-sm"
+              placeholder={t("modal.image_url_placeholder")}
+              value={isLocal ? "" : imageUrl}
+              onInput={(e) => handleImageUrlChange((e.target as HTMLInputElement).value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleSubmitUrl();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={() => { void handleSubmitUrl(); }}
+              disabled={uploading}
+            >
+              {t("modal.add")}
+            </button>
+          </div>
           <div className="flex items-center gap-2">
             <label className="btn btn-sm btn-outline cursor-pointer">
-              {uploading ? (t("upload_progress") || "Uploading...") : (t("upload_image") || "Upload")}
+              {uploading ? t("modal.upload_progress") : t("modal.upload_image")}
               <input
                 type="file"
                 accept="image/*"
@@ -227,10 +256,10 @@ export const WallpaperSelector: FunctionalComponent<WallpaperSelectorProps> = ({
             </label>
             {uploadError && <span className="text-xs text-red-400">{uploadError}</span>}
           </div>
-          {imageUrl && !isLocal && (
+          {value && !isGradient && !isColor && (
             <div className="h-20 rounded-lg overflow-hidden bg-[color:color-mix(in_oklab,var(--my-surface-strong)_86%,transparent)] border border-[color:color-mix(in_oklab,var(--my-outline)_42%,transparent)]">
               <img
-                src={imageUrl}
+                src={resolveWallpaperUrl(value)}
                 alt={t("modal.preview")}
                 className="w-full h-full object-cover"
                 onError={() => {
@@ -241,7 +270,7 @@ export const WallpaperSelector: FunctionalComponent<WallpaperSelectorProps> = ({
           )}
           {localImages.length > 0 && (
             <div>
-              <div className="text-xs text-base-content/60 mb-1">{t("local_images") || "Local images"}</div>
+              <div className="text-xs text-base-content/60 mb-1">{t("modal.local_images")}</div>
               <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
                 {localImages.map((img) => (
                   <div
@@ -265,7 +294,7 @@ export const WallpaperSelector: FunctionalComponent<WallpaperSelectorProps> = ({
                         e.stopPropagation();
                         void handleDeleteLocal(img.name);
                       }}
-                      title={t("delete_image") || "Delete"}
+                      title={t("modal.delete_image")}
                     >
                       ×
                     </button>

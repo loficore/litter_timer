@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/preact";
+import { render, screen, fireEvent, waitFor } from "@testing-library/preact";
 import { WallpaperSelector } from "../../components/WallpaperSelector";
 
 vi.mock("../../utils/i18n", () => ({
@@ -21,9 +21,28 @@ vi.mock("../../utils/i18n", () => ({
       "modal.gradient_aurora": "Aurora",
       "modal.gradient_coral": "Coral",
       "modal.gradient_mint": "Mint",
+      "upload_fail": "Upload failed",
+      "add": "Add",
+      "upload_image": "Upload",
+      "upload_progress": "Uploading...",
     };
     return translations[key] || key;
   },
+}));
+
+const mockFetchWallpaperByUrl = vi.fn();
+const mockListWallpapers = vi.fn().mockResolvedValue([]);
+const mockUploadWallpaper = vi.fn();
+const mockDeleteWallpaper = vi.fn();
+
+vi.mock("../../utils/apiClientSingleton", () => ({
+  getAPIClient: () => ({
+    fetchWallpaperByUrl: mockFetchWallpaperByUrl,
+    listWallpapers: mockListWallpapers,
+    uploadWallpaper: mockUploadWallpaper,
+    deleteWallpaper: mockDeleteWallpaper,
+  }),
+  APIClient: class {},
 }));
 
 describe("WallpaperSelector", () => {
@@ -31,6 +50,7 @@ describe("WallpaperSelector", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockListWallpapers.mockResolvedValue([]);
   });
 
   it("应该渲染壁纸选择器", () => {
@@ -179,7 +199,9 @@ describe("WallpaperSelector", () => {
     }
   });
 
-  it("输入图片 URL 时应该调用 onChange", () => {
+  it("输入图片 URL 时不应该自动调用 onChange，点击 Add 按钮后才调用", async () => {
+    mockFetchWallpaperByUrl.mockResolvedValue({ filename: "456_test.png" });
+
     render(
       <WallpaperSelector
         value=""
@@ -192,7 +214,16 @@ describe("WallpaperSelector", () => {
     const input = screen.getByPlaceholderText("Enter image URL") as HTMLInputElement;
     fireEvent.input(input, { target: { value: "https://example.com/test.jpg" } });
 
-    expect(mockOnChange).toHaveBeenCalledWith("https://example.com/test.jpg");
+    // typing alone does NOT call onChange
+    expect(mockOnChange).not.toHaveBeenCalled();
+
+    // click the Add button
+    const addButton = screen.getByText("Add");
+    fireEvent.click(addButton);
+
+    await waitFor(() => {
+      expect(mockOnChange).toHaveBeenCalledWith("local:456_test.png");
+    });
   });
 
   it("空图片 URL 不应该调用 onChange", () => {
@@ -208,6 +239,49 @@ describe("WallpaperSelector", () => {
     const input = screen.getByPlaceholderText("Enter image URL") as HTMLInputElement;
     fireEvent.input(input, { target: { value: "   " } });
 
+    expect(mockOnChange).not.toHaveBeenCalled();
+  });
+
+  it("fetchWallpaperByUrl 失败时显示错误，不调用 onChange", async () => {
+    mockFetchWallpaperByUrl.mockRejectedValue(new Error("Network error"));
+
+    render(
+      <WallpaperSelector
+        value=""
+        onChange={mockOnChange}
+      />
+    );
+
+    fireEvent.click(screen.getByText("Image"));
+
+    const input = screen.getByPlaceholderText("Enter image URL") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "https://bad.com/image.jpg" } });
+
+    const addButton = screen.getByText("Add");
+    fireEvent.click(addButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("Upload failed")).toBeTruthy();
+    });
+
+    // onChange should NOT be called with the raw URL
+    expect(mockOnChange).not.toHaveBeenCalled();
+  });
+
+  it("仅输入 URL 不点击 Add 不应调用 onChange", () => {
+    render(
+      <WallpaperSelector
+        value=""
+        onChange={mockOnChange}
+      />
+    );
+
+    fireEvent.click(screen.getByText("Image"));
+
+    const input = screen.getByPlaceholderText("Enter image URL") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "https://example.com/photo.jpg" } });
+
+    // no onChange call at all — decoupled from input
     expect(mockOnChange).not.toHaveBeenCalled();
   });
 });

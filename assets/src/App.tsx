@@ -1,4 +1,4 @@
-import { useState, useEffect } from "preact/hooks";
+import { useState, useEffect, useCallback } from "preact/hooks";
 import { Sidebar } from "./components/Sidebar";
 import { TimerPage } from "./TimerPage";
 import { HabitsPage } from "./HabitsPage";
@@ -8,6 +8,7 @@ import { ErrorNotification } from "./components/ErrorNotification.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { getFrontendLogLevel, isPerfDebugEnabled, isWebViewRuntime, logError, logLifecycle, logPerf } from "./utils/logger";
 import { useAppSettings, logWallpaperDebug } from "./hooks/useAppSettings";
+import { resolveWallpaperUrl } from "./utils/constants";
 import { t } from "./utils/i18n";
 
 type Page = "timer" | "habits" | "stats" | "settings";
@@ -29,7 +30,7 @@ const formatUnknownError = (value: unknown): string => {
 export const App = () => {
   const [page, setPage] = useState<Page>("timer");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const { settings, normalizeWallpaper } = useAppSettings();
+  const { settings, normalizeWallpaper, updateSettings } = useAppSettings();
 
   const navigateTo = (newPage: Page) => {
     setPage(newPage);
@@ -76,6 +77,49 @@ export const App = () => {
     };
   }, [page]);
 
+  useEffect(() => {
+    const wp = settings.wallpaper;
+    if (!wp) {
+      document.documentElement.style.background = "";
+      document.documentElement.style.backgroundImage = "";
+      document.documentElement.style.backgroundSize = "";
+      document.documentElement.style.backgroundPosition = "";
+      document.documentElement.style.backgroundAttachment = "";
+      return;
+    }
+
+    if (wp.startsWith("linear")) {
+      document.documentElement.style.backgroundImage = "";
+      document.documentElement.style.background = wp;
+    } else if (wp.startsWith("#")) {
+      document.documentElement.style.backgroundImage = "";
+      document.documentElement.style.background = wp;
+    } else {
+      const imgUrl = resolveWallpaperUrl(wp);
+      document.documentElement.style.background = "";
+      document.documentElement.style.backgroundImage = `url(${imgUrl})`;
+      document.documentElement.style.backgroundSize = "cover";
+      document.documentElement.style.backgroundPosition = "center";
+      document.documentElement.style.backgroundAttachment = "fixed";
+    }
+
+    try {
+      localStorage.setItem("global_wallpaper", wp);
+    } catch {
+      // ignore
+    }
+  }, [settings.wallpaper]);
+
+  const handleWallpaperChange = useCallback((wallpaper: string) => {
+    const normalized = normalizeWallpaper(wallpaper);
+    logWallpaperDebug("updateGlobalWallpaper", {
+      source: "settings-prop",
+      incoming: wallpaper,
+      normalized,
+    });
+    updateSettings({ wallpaper: normalized });
+  }, [normalizeWallpaper, updateSettings]);
+
   return (
     <>
       <ErrorNotification
@@ -111,13 +155,7 @@ export const App = () => {
               <SettingsPage
                 onBackClick={() => navigateTo("timer")}
                 wallpaper={globalWallpaper}
-                onWallpaperChange={(wallpaper) => {
-                  logWallpaperDebug("updateGlobalWallpaper", {
-                    source: "settings-prop",
-                    incoming: wallpaper,
-                    normalized: normalizeWallpaper(wallpaper),
-                  });
-                }}
+                onWallpaperChange={handleWallpaperChange}
               />
             )}
           </ErrorBoundary>

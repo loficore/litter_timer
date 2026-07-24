@@ -416,6 +416,14 @@ export class WailsAPIClient {
   async deleteWallpaper(_filename: string): Promise<WallpaperDeleteResult> {
     return { success: true };
   }
+
+  /**
+   * 从 URL 获取壁纸（Android 不可用，返回空）
+   * @param _url - 壁纸 URL
+   */
+  async fetchWallpaperByUrl(_url: string): Promise<WallpaperUploadResult> {
+    return { filename: "" };
+  }
 }
 
 // Re-export the type guard

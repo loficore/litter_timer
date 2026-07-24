@@ -519,4 +519,17 @@ export class APIClient {
             method: "DELETE",
         });
     }
+
+    /**
+     * 从 URL 获取壁纸
+     * @param {string} url 壁纸 URL
+     * @returns {Promise<WallpaperUploadResult>} 上传后的文件名
+     */
+    async fetchWallpaperByUrl(url: string): Promise<WallpaperUploadResult> {
+        return this.fetchJson<WallpaperUploadResult>(`${this.baseUrl}/api/wallpapers/from-url`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
+        });
+    }
 }
