@@ -158,6 +158,7 @@ func TestAllRoutesRegistered(t *testing.T) {
 		// Wallpapers
 		{http.MethodGet, "/api/wallpapers"},
 		{http.MethodPost, "/api/wallpapers"},
+		{http.MethodPost, "/api/wallpapers/from-url"},
 	}
 
 	for _, rt := range routes {

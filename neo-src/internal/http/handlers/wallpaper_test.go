@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -407,3 +409,259 @@ type testMultipartFile struct {
 func (f *testMultipartFile) Close() error                  { return nil }
 func (f *testMultipartFile) ReadAt(p []byte, off int64) (int, error) { return f.Reader.Read(p) }
 func (f *testMultipartFile) Seek(offset int64, whence int) (int64, error) { return 0, nil }
+
+// ---------------------------------------------------------------------------
+// POST /api/wallpapers/from-url  tests
+// ---------------------------------------------------------------------------
+
+func TestHandleWallpaperFromURL(t *testing.T) {
+	t.Run("FromURL_Happy", func(t *testing.T) {
+		a, wallpaperDir := newWallpaperTestApp(t)
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "image/png")
+			w.Write([]byte("fake png bytes"))
+		}))
+		defer srv.Close()
+
+		body, _ := json.Marshal(map[string]string{"url": srv.URL + "/test.png"})
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/wallpapers/from-url", bytes.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set("app", a)
+
+		handleWallpaperFromURL(c)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
+		}
+		var got map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatalf("response not JSON: %v", err)
+		}
+		if got["filename"] == nil || got["filename"].(string) == "" {
+			t.Errorf("missing or empty filename in response")
+		}
+		filename := got["filename"].(string)
+		filePath := filepath.Join(wallpaperDir, filename)
+		if _, err := os.Stat(filePath); err != nil {
+			t.Errorf("file not saved: %v", err)
+		}
+	})
+
+	t.Run("FromURL_ContentTypeWithParams", func(t *testing.T) {
+		a, wallpaperDir := newWallpaperTestApp(t)
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "image/png; charset=binary")
+			w.Write([]byte("fake png with params"))
+		}))
+		defer srv.Close()
+
+		body, _ := json.Marshal(map[string]string{"url": srv.URL + "/img.png"})
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/wallpapers/from-url", bytes.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set("app", a)
+
+		handleWallpaperFromURL(c)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
+		}
+		var got map[string]any
+		json.Unmarshal(w.Body.Bytes(), &got)
+		filename := got["filename"].(string)
+		if !strings.HasSuffix(filename, ".png") {
+			t.Errorf("filename %q should end with .png", filename)
+		}
+		if _, err := os.Stat(filepath.Join(wallpaperDir, filename)); err != nil {
+			t.Errorf("file not saved: %v", err)
+		}
+	})
+
+	t.Run("FromURL_Redirect", func(t *testing.T) {
+		a, wallpaperDir := newWallpaperTestApp(t)
+
+		finalSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "image/jpeg")
+			w.Write([]byte("redirected jpeg"))
+		}))
+		defer finalSrv.Close()
+
+		redirectSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, finalSrv.URL+"/real.jpg", http.StatusMovedPermanently)
+		}))
+		defer redirectSrv.Close()
+
+		body, _ := json.Marshal(map[string]string{"url": redirectSrv.URL + "/redirect.jpg"})
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/wallpapers/from-url", bytes.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set("app", a)
+
+		handleWallpaperFromURL(c)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
+		}
+		var got map[string]any
+		json.Unmarshal(w.Body.Bytes(), &got)
+		if _, err := os.Stat(filepath.Join(wallpaperDir, got["filename"].(string))); err != nil {
+			t.Errorf("file not saved after redirect: %v", err)
+		}
+	})
+
+	t.Run("FromURL_NonImage", func(t *testing.T) {
+		a, wallpaperDir := newWallpaperTestApp(t)
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html")
+			w.Write([]byte("<html>not an image</html>"))
+		}))
+		defer srv.Close()
+
+		body, _ := json.Marshal(map[string]string{"url": srv.URL + "/page.html"})
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/wallpapers/from-url", bytes.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set("app", a)
+
+		handleWallpaperFromURL(c)
+
+		if w.Code != http.StatusUnsupportedMediaType {
+			t.Errorf("code = %d, want 415", w.Code)
+		}
+		entries, _ := os.ReadDir(wallpaperDir)
+		if len(entries) != 0 {
+			t.Errorf("expected no files in wallpapers dir, got %d", len(entries))
+		}
+	})
+
+	t.Run("FromURL_TooLarge", func(t *testing.T) {
+		a, wallpaperDir := newWallpaperTestApp(t)
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "image/png")
+			// Write 50MB + 1 byte
+			chunk := make([]byte, 1024*1024)
+			for i := 0; i < 50; i++ {
+				w.Write(chunk)
+			}
+			w.Write([]byte("x"))
+		}))
+		defer srv.Close()
+
+		body, _ := json.Marshal(map[string]string{"url": srv.URL + "/big.png"})
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/wallpapers/from-url", bytes.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set("app", a)
+
+		handleWallpaperFromURL(c)
+
+		if w.Code != http.StatusRequestEntityTooLarge {
+			t.Errorf("code = %d, want 413", w.Code)
+		}
+		entries, _ := os.ReadDir(wallpaperDir)
+		if len(entries) != 0 {
+			t.Errorf("expected no partial files, got %d entries", len(entries))
+		}
+	})
+
+	t.Run("FromURL_Timeout", func(t *testing.T) {
+		a, _ := newWallpaperTestApp(t)
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(35 * time.Second)
+		}))
+		defer srv.Close()
+
+		body, _ := json.Marshal(map[string]string{"url": srv.URL + "/slow.png"})
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		// ponytail: 5s client timeout for the test — 35s server sleep triggers it
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		req := httptest.NewRequest(http.MethodPost, "/api/wallpapers/from-url", bytes.NewReader(body))
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+		c.Set("app", a)
+
+		handleWallpaperFromURL(c)
+
+		if w.Code != http.StatusGatewayTimeout {
+			t.Errorf("code = %d, want 504", w.Code)
+		}
+	})
+
+	t.Run("FromURL_UpstreamError", func(t *testing.T) {
+		a, _ := newWallpaperTestApp(t)
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer srv.Close()
+
+		body, _ := json.Marshal(map[string]string{"url": srv.URL + "/gone.png"})
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/wallpapers/from-url", bytes.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set("app", a)
+
+		handleWallpaperFromURL(c)
+
+		if w.Code != http.StatusBadGateway {
+			t.Errorf("code = %d, want 502", w.Code)
+		}
+	})
+
+	t.Run("FromURL_MissingField", func(t *testing.T) {
+		a, _ := newWallpaperTestApp(t)
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/wallpapers/from-url", strings.NewReader(""))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set("app", a)
+
+		handleWallpaperFromURL(c)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("code = %d, want 400", w.Code)
+		}
+	})
+
+	t.Run("FromURL_BadScheme", func(t *testing.T) {
+		a, _ := newWallpaperTestApp(t)
+
+		body, _ := json.Marshal(map[string]string{"url": "file:///etc/passwd"})
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/wallpapers/from-url", bytes.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set("app", a)
+
+		handleWallpaperFromURL(c)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("code = %d, want 400", w.Code)
+		}
+	})
+}

@@ -89,6 +89,7 @@ func WallpaperUpload(c *gin.Context)         { handleWallpaperUpload(c) }
 func WallpaperList(c *gin.Context)           { handleWallpaperList(c) }
 func WallpaperServe(c *gin.Context)          { handleWallpaperServe(c) }
 func WallpaperDelete(c *gin.Context)         { handleWallpaperDelete(c) }
+func WallpaperFromURL(c *gin.Context)        { handleWallpaperFromURL(c) }
 
 // -----------------------------------------------------------------------------
 // SSE + frontend log.

@@ -142,6 +142,7 @@ func registerBackup(r *gin.Engine) {
 
 func registerWallpapers(r *gin.Engine) {
 	g := r.Group("/api/wallpapers")
+	g.POST("/from-url", handlers.WallpaperFromURL)
 	g.POST("", handlers.WallpaperUpload)
 	g.GET("", handlers.WallpaperList)
 	g.GET("/:id", handlers.WallpaperServe)
