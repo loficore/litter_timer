@@ -158,20 +158,8 @@ export interface HabitDetail {
   color: string;
   /** 今日累计时长（秒） */
   today_seconds: number;
-  /** 连续完成天数 */
-  streak: number;
   /** 当前进度百分比 */
   progress_percent: number;
-}
-
-/**
- * @description 习惯连续完成天数
- */
-export interface HabitStreak {
-  /** 习惯 ID */
-  habit_id: number;
-  /** 连续完成天数 */
-  streak: number;
 }
 
 /**
@@ -268,6 +256,7 @@ export interface BackupConfig {
   webdav_username?: string;
   /** WebDAV 密码 */
   webdav_password?: string;
+  webdav_path_prefix?: string;
   /** S3 服务端点 */
   s3_endpoint?: string;
   /** S3 存储桶名称 */

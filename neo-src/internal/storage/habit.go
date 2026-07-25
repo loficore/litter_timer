@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"little-timer/internal/domain"
 )
 
 // HabitError mirrors `pub const HabitError = error{...}` in habit_crud.zig.
@@ -207,6 +209,29 @@ func (h *HabitCrud) Create(setID int64, name string, goalSeconds int64, color st
 		return 0, fmt.Errorf("%w: %w", ErrHabitInsertFailed, err)
 	}
 	return res.LastInsertId()
+}
+
+// NameExistsInSet reports whether a habit name is already used in a set.
+// excludeID is omitted by passing 0 because habit IDs start at 1.
+func (h *HabitCrud) NameExistsInSet(setID int64, name string, excludeID *int64) (bool, error) {
+	if h.db == nil {
+		return false, ErrHabitQueryFailed
+	}
+
+	excludedID := int64(0)
+	if excludeID != nil {
+		excludedID = *excludeID
+	}
+
+	var count int64
+	err := h.db.QueryRow(
+		`SELECT COUNT(*) FROM habits WHERE set_id = ? AND name = ? AND id != ?;`,
+		setID, name, excludedID,
+	).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("%w: %w", ErrHabitQueryFailed, err)
+	}
+	return count > 0, nil
 }
 
 // List returns every habit ordered by created_at DESC.  Mirrors Zig
@@ -459,8 +484,8 @@ func (t *TimerSessionCrud) UpdateTimerSession(
 	_, err := t.db.Exec(updateSQL,
 		now, elapsedSeconds, remainingSeconds, pausedTotalSeconds,
 		pauseStartedAt, lastSyncedAt,
-		boolToInt(isRunning), boolToInt(isPaused), boolToInt(isFinished),
-		currentRound, boolToInt(inRest),
+		domain.BoolToInt(isRunning), domain.BoolToInt(isPaused), domain.BoolToInt(isFinished),
+		currentRound, domain.BoolToInt(inRest),
 		sessionID,
 	)
 	if err != nil {
@@ -495,12 +520,12 @@ func (t *TimerSessionCrud) getTimerSession(whereClause string, arg any) (TimerSe
 	q := `SELECT ` + selectCols + ` FROM timer_sessions ` + whereClause
 
 	var (
-		row    TimerSessionRow
-		habit  sql.NullInt64
-		isRun  int64
-		isFin  int64
+		row     TimerSessionRow
+		habit   sql.NullInt64
+		isRun   int64
+		isFin   int64
 		isPause int64
-		inRest int64
+		inRest  int64
 	)
 	var rows *sql.Rows
 	var err error
@@ -635,56 +660,10 @@ func (t *TimerSessionCrud) GetHabitStats(habitID int64) (map[string]interface{},
 		}
 	}
 
-	// Calculate streaks (simplified: count consecutive days with sessions)
-	currentStreak := calculateStreak(habitID, t.db)
-	longestStreak := currentStreak // simplified
-
 	return map[string]interface{}{
-		"habit_id":          habitID,
-		"total_seconds_week": totalSeconds,
+		"habit_id":            habitID,
+		"total_seconds_week":  totalSeconds,
 		"total_sessions_week": totalSessions,
-		"current_streak":    currentStreak,
-		"longest_streak":    longestStreak,
-		"weekly_breakdown":  weeklyBreakdown,
+		"weekly_breakdown":    weeklyBreakdown,
 	}, nil
-}
-
-// calculateStreak returns the current streak for a habit (consecutive days with sessions).
-func calculateStreak(habitID int64, db *sql.DB) int64 {
-	// Query sessions ordered by date desc, count consecutive days
-	rows, err := db.Query(`
-		SELECT DISTINCT date FROM sessions
-		WHERE habit_id = ?
-		ORDER BY date DESC LIMIT 30`, habitID)
-	if err != nil {
-		return 0
-	}
-	defer rows.Close()
-
-	streak := int64(0)
-	var prevDate time.Time
-	for rows.Next() {
-		var dateStr string
-		if err := rows.Scan(&dateStr); err != nil {
-			break
-		}
-		t, _ := time.Parse("2006-01-02", dateStr)
-		if prevDate.IsZero() {
-			// First row - check if it's today or yesterday
-			if time.Since(t) < 48*time.Hour {
-				streak = 1
-				prevDate = t
-			} else {
-				break
-			}
-		} else {
-			if t.Sub(prevDate) == 24*time.Hour {
-				streak++
-				prevDate = t
-			} else {
-				break
-			}
-		}
-	}
-	return streak
 }

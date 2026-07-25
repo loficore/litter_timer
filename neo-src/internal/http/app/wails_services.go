@@ -24,10 +24,6 @@ import (
 	"little-timer/internal/storage"
 )
 
-// -----------------------------------------------------------------------------
-// Shared helpers — small enough to duplicate rather than share across packages.
-// -----------------------------------------------------------------------------
-
 // modeKey mirrors `modeKey` in handlers/timer.go — renders the active
 // clock mode as the stable string the JS client expects.
 func modeKey(m domain.ModeEnum) string {
@@ -35,19 +31,6 @@ func modeKey(m domain.ModeEnum) string {
 		return "countdown"
 	}
 	return "stopwatch"
-}
-
-// todayString returns today as "YYYY-MM-DD" in UTC.  Matches the
-// handler helper used by `handleFinish`, `handleHabitDetail`, and
-// `handleSessionCreate`.
-func todayString() string {
-	return time.Now().UTC().Format("2006-01-02")
-}
-
-// daysAgoString returns the date n days before today as "YYYY-MM-DD".
-// Used by HabitService.GetHabitStreak to walk back day-by-day.
-func daysAgoString(n int) string {
-	return time.Now().UTC().AddDate(0, 0, -n).Format("2006-01-02")
 }
 
 // -----------------------------------------------------------------------------
@@ -185,7 +168,7 @@ func (s *TimerService) FinishTimer() (any, error) {
 		state := a.Clock.Update()
 		elapsedSeconds := state.GetElapsedSeconds()
 		if habitID != nil && elapsedSeconds > 0 {
-			_, _ = a.SQLite.Timers().CreateSession(*habitID, elapsedSeconds, 1, todayString())
+			_, _ = a.SQLite.Timers().CreateSession(*habitID, elapsedSeconds, 1, domain.TodayString(a.Settings.Config().Basic.Timezone))
 		}
 		a.ResetTimerSession()
 		return map[string]any{
@@ -195,7 +178,7 @@ func (s *TimerService) FinishTimer() (any, error) {
 	}
 
 	if habitID != nil && elapsed > 0 {
-		_, _ = a.SQLite.Timers().CreateSession(*habitID, elapsed, 1, todayString())
+		_, _ = a.SQLite.Timers().CreateSession(*habitID, elapsed, 1, domain.TodayString(a.Settings.Config().Basic.Timezone))
 	}
 	a.ResetTimerSession()
 
@@ -314,7 +297,7 @@ func (s *HabitService) CreateHabitSet(name string, description string, color str
 		return nil, errEmptyName
 	}
 	if color == "" {
-		color = "#6366f1"
+		color = domain.DefaultColor
 	}
 	id, err := s.app.SQLite.HabitSets().Create(name, description, color)
 	if err != nil {
@@ -334,7 +317,7 @@ func (s *HabitService) UpdateHabitSet(id int64, name string, description string,
 		return nil, errEmptyName
 	}
 	if color == "" {
-		color = "#6366f1"
+		color = domain.DefaultColor
 	}
 	if err := s.app.SQLite.HabitSets().Update(id, name, description, color, wallpaper); err != nil {
 		return nil, err
@@ -381,10 +364,10 @@ func (s *HabitService) CreateHabit(setID int64, name string, goalSeconds int64, 
 		return nil, errEmptyName
 	}
 	if goalSeconds == 0 {
-		goalSeconds = 1500
+		goalSeconds = domain.DefaultGoalSeconds
 	}
 	if color == "" {
-		color = "#6366f1"
+		color = domain.DefaultColor
 	}
 	id, err := s.app.SQLite.Habits().Create(setID, name, goalSeconds, color)
 	if err != nil {
@@ -405,10 +388,10 @@ func (s *HabitService) UpdateHabit(id int64, name string, goalSeconds int64, col
 		return nil, errEmptyName
 	}
 	if goalSeconds == 0 {
-		goalSeconds = 1500
+		goalSeconds = domain.DefaultGoalSeconds
 	}
 	if color == "" {
-		color = "#6366f1"
+		color = domain.DefaultColor
 	}
 	if err := s.app.SQLite.Habits().Update(id, name, goalSeconds, color, wallpaper); err != nil {
 		return nil, err
@@ -434,7 +417,7 @@ func (s *HabitService) DeleteHabit(id int64) (any, error) {
 // to today.
 func (s *HabitService) CreateSession(habitID int64, durationSeconds int64, count int64, date string) (any, error) {
 	if date == "" {
-		date = todayString()
+		date = domain.TodayString(s.app.Settings.Config().Basic.Timezone)
 	}
 	if count == 0 {
 		count = 1
@@ -466,7 +449,7 @@ func (s *HabitService) ListSessions(date string, startDate string, endDate strin
 	case date != "":
 		rows, err = s.app.SQLite.Timers().ListSessionsByDate(date, limit, offset)
 	default:
-		rows, err = s.app.SQLite.Timers().ListSessionsByDate(todayString(), limit, offset)
+		rows, err = s.app.SQLite.Timers().ListSessionsByDate(domain.TodayString(s.app.Settings.Config().Basic.Timezone), limit, offset)
 	}
 	if err != nil {
 		return nil, err
@@ -474,49 +457,12 @@ func (s *HabitService) ListSessions(date string, startDate string, endDate strin
 	return rows, nil
 }
 
-// GetHabitStreak returns the current consecutive-day streak where
-// the habit met `goalSeconds`.  When goalSeconds <= 0, falls back to
-// the habit's persisted goal.
-//
-// ponytail: walk-back day-by-day — the simplest correct streak for
-// the Wails client.  A future optimisation can fold this into a
-// single grouped SQL query.
-func (s *HabitService) GetHabitStreak(habitID int64, goalSeconds int64) (any, error) {
-	if goalSeconds <= 0 {
-		row, err := s.app.SQLite.Habits().GetByID(habitID)
-		if err != nil {
-			return nil, err
-		}
-		goalSeconds = row.GoalSeconds
-	}
-	const maxLookback = 365
-	current := int64(0)
-	for i := 0; i < maxLookback; i++ {
-		secs, err := s.app.SQLite.Timers().TodaySecondsForHabit(habitID, daysAgoString(i))
-		if err != nil {
-			return nil, err
-		}
-		if secs >= goalSeconds {
-			current++
-			continue
-		}
-		break
-	}
-	return map[string]any{
-		"habit_id":         habitID,
-		"goal_seconds":     goalSeconds,
-		"current_streak":   current,
-		"longest_streak":   current,
-		"last_active_date": todayString(),
-	}, nil
-}
-
 // GetHabitDetail mirrors handleHabitDetail — single habit with
 // today's accumulated seconds + progress percent.
 func (s *HabitService) GetHabitDetail(id int64, date string) (any, error) {
 	a := s.app
 	if date == "" {
-		date = todayString()
+		date = domain.TodayString(a.Settings.Config().Basic.Timezone)
 	}
 	row, err := a.SQLite.Habits().GetByID(id)
 	if err != nil {
@@ -704,8 +650,8 @@ func (s *BackupService) SetMasterPassword(password string) (any, error) {
 func (s *BackupService) UnlockCredentials(password string) (any, error) {
 	res := s.app.UnlockCredentials(password)
 	return map[string]any{
-		"success":       res.Success,
-		"locked_until":  res.LockedUntil,
+		"success":      res.Success,
+		"locked_until": res.LockedUntil,
 	}, nil
 }
 

@@ -1,12 +1,11 @@
 /**
  * 计时器进度显示组件
- * 显示今日进度、目标、进度条和连胜信息
+ * 显示今日进度、目标和进度条
  */
 
 import { memo } from "preact/compat";
 import type { FunctionalComponent } from "preact";
 import { formatDuration, calculateProgress } from "../utils/formatters";
-import { StarIconComponent } from "../utils/icons";
 import { useEffect, useState } from "preact/hooks";
 
 /**
@@ -17,8 +16,6 @@ interface HabitDetailData {
   today_seconds: number;
   /** 目标秒数 */
   goal_seconds: number;
-  /** 连续坚持天数 */
-  streak: number;
 }
 
 interface TimerProgressProps {
@@ -72,12 +69,6 @@ export const TimerProgress: FunctionalComponent<TimerProgressProps> = memo(({
         <span className="text-base-content/60">
           进度 {progressPercent}%
         </span>
-        {habitDetail.streak > 0 && (
-          <span className="text-warning inline-flex items-center gap-1 animate-pulse">
-            <StarIconComponent />
-            {habitDetail.streak} 天
-          </span>
-        )}
       </div>
     </div>
   );

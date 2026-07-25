@@ -1,11 +1,12 @@
 # Little Timer
 
-Little Timer is a cross-platform timer application built with Zig and WebUI, supporting countdown, stopwatch, and world clock features.
+Little Timer is a cross-platform timer application built with Go, Gin, SQLite, and WebView. It supports countdown, stopwatch, and world clock features. The frontend uses Preact, TypeScript, Vite, and Tailwind CSS.
 
 ## Features
 
-- 🎯 **Cross-Platform**: Supports Linux and Windows (Android support planned)
-- ⚡ **High Performance**: Efficient backend written in Zig
+- 🎯 **Cross-Platform**: Supports Linux and Windows, with an experimental Wails build path for Android
+- ⚡ **Reliable Backend**: Built with Go, Gin, and SQLite
+- 🖥️ **Desktop Runtime**: Optional WebView window or HTTP-only mode
 - 🎨 **Modern UI**: Responsive interface based on Preact + Tailwind CSS
 - 🔄 **Modular Architecture**: Clear separation between frontend and backend
 - 📱 **Mobile First**: Touch-friendly with mobile device optimization
@@ -18,25 +19,32 @@ This project is licensed under the [Apache License 2.0](./LICENSE). Please use i
 
 ### Desktop (Linux / WSL / Windows)
 
-For Windows, it's recommended to use MinGW64 to avoid potential dependency issues.
+The default development workflow starts the frontend development server and Go HTTP backend together:
 
 ```bash
-zig build run
+just go-dev
 ```
 
-Zig will automatically download dependencies, compile the C library, and run the application.
+To run only the HTTP backend on Linux:
+
+```bash
+cd neo-src
+go run ./cmd/server serve --http-only
+```
+
+Use `just go-dev-webview` when you need a desktop WebView window. Linux WebView mode requires the `webkit2gtk-4.1` or `webkitgtk-6.0` system libraries.
 
 ### Android
 
-⚠️ **Current Status**: Android support is currently under development and not yet available. We plan to provide complete Android support in a future release.
+⚠️ **Current Status**: An experimental Wails-based Android build script is available, but it requires a local Android SDK, NDK, and Gradle setup. Android release support is not complete. Use `just apk` to build a debug APK, or `just apk-package` to run only the Gradle packaging step.
 
 ## Dependencies & Environment
 
-- **Zig**: Recommended version **0.15.2** (for building the backend and dependencies)
-- **Node.js + pnpm**: For frontend development and builds (frontend is under assets/), use **v22.21.1**
-- **System Libraries**: WebUI runtime dependencies (on Linux/Windows, ensure WebUI-related shared libraries can be loaded correctly)
+- **Go**: Use Go **1.25.0**, as declared in `neo-src/go.mod`
+- **Node.js + pnpm**: For frontend development and builds (frontend is under assets/)
+- **System Libraries**: Desktop WebView mode on Linux requires `webkit2gtk-4.1` or `webkitgtk-6.0`
 
-> If you only run the backend with `zig build run`, the prebuilt frontend assets can be used directly. If you modify the UI, follow the “Frontend Development & Build” section below.
+> If you only run the HTTP backend, existing frontend assets can be used directly. If you modify the UI, follow the “Frontend Development & Build” section below.
 
 ## Frontend Development & Build
 
@@ -50,49 +58,41 @@ pnpm install
 Local development (HMR):
 
 ```bash
-pnpm dev
+pnpm run dev
 ```
 
 Production build (outputs to assets/dist):
 
 ```bash
-pnpm build
+pnpm run build
 ```
 
 Lint:
 
 ```bash
-pnpm lint
+pnpm run lint
 ```
 
 ## Scripted Build & Packaging
 
-Build on Linux / macOS:
+Build the Go backend on Linux / macOS:
 
 ```bash
-./scripts/build.sh --release --embed-html
-./scripts/build.sh --debug --embed-html
-./scripts/build.sh --debug --no-embed-html
+./scripts/build.sh --go --release
+./scripts/build.sh --go --debug
 ```
 
-Build on Windows (PowerShell recommended):
+The Windows PowerShell script still targets the older desktop build flow. Build the Go backend directly instead:
 
 ```powershell
-./scripts/build.ps1 --release --embed-html
-./scripts/build.ps1 --debug --embed-html
-./scripts/build.ps1 --debug --no-embed-html
+cd neo-src
+go build -o bin/server ./cmd/server/
 ```
 
-`scripts/build.bat` is still available, but it is now a compatibility wrapper that forwards to `build.ps1`.
-
-Packaging scripts:
+Package the Go backend on Linux:
 
 ```bash
-./scripts/package_linux.sh --release --embed-html
-./scripts/package_linux.sh --debug --no-embed-html
-
-./scripts/package_mingw64.sh --release --embed-html
-./scripts/package_mingw64.sh --debug --no-embed-html
+./scripts/package_go.sh --version 1.0.0
 ```
 
 ## Configuration
@@ -108,13 +108,24 @@ You can read/update settings via API:
 - `GET /api/settings`
 - `POST /api/settings`
 
+## Tooling
+
+```bash
+# Build and vet the Go backend
+just go-build
+just go-vet
+
+# List available tasks
+just --list
+```
+
 ## FAQ
 
 **Q: Why did the build fail?**  
-A: Make sure you have the latest version of Zig installed. The first build will automatically compile dependencies and may take longer.
+A: Make sure Go 1.25.0, Node.js, and pnpm are installed. When embedding the frontend, run `pnpm run build` in `assets/` first.
 
 **Q: Why is compilation so slow?**  
-A: The first compilation builds the C source code of webui. Subsequent builds will use caching and be much faster.
+A: The first build downloads Go and frontend dependencies. Later builds use the local caches.
 
 **Q: I want to know more technical details?**  
-A: See [ARCHITECTURE.md](./ARCHITECTURE.md) and [ANDROID_BUILD.md](./ANDROID_BUILD.md).
+A: See the [neo-src/](./neo-src/) and [android/](./android/) directories.

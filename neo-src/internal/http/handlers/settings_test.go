@@ -31,8 +31,8 @@ func setupSettingsRouter(t *testing.T, a *app.App) *gin.Engine {
 	})
 
 	// Register settings routes
-	r.GET("/api/settings", handleSettingsGet)
-	r.POST("/api/settings", handleSettingsUpdate)
+	r.GET("/api/settings", SettingsGet)
+	r.POST("/api/settings", SettingsUpdate)
 
 	return r
 }

@@ -424,7 +424,7 @@ func (sm *SettingsManager) parseSettingsFromJSON(jsonStr string) error {
 			}
 		}
 		if v, ok := basic["default_mode"].(string); ok {
-			sm.config.Basic.DefaultMode = parseDefaultMode(v)
+			sm.config.Basic.DefaultMode = domain.ParseDefaultMode(v)
 		}
 		if v, ok := basic["theme_mode"].(string); ok {
 			sm.config.Basic.ThemeMode = v
@@ -579,8 +579,8 @@ func (sm *SettingsManager) saveBackupConfigToDB() error {
 
 	_, err = db.Exec(backupConfigSQL,
 		sm.backupConfig.TargetType.String(),
-		boolToInt(sm.backupConfig.Enabled),
-		boolToInt(sm.backupConfig.AutoBackup),
+		domain.BoolToInt(sm.backupConfig.Enabled),
+		domain.BoolToInt(sm.backupConfig.AutoBackup),
 		int64(sm.backupConfig.AutoBackupSecs),
 		nullable(sm.backupConfig.LocalPath),
 		nullable(sm.backupConfig.WebDAVURL),
@@ -592,7 +592,7 @@ func (sm *SettingsManager) saveBackupConfigToDB() error {
 		s3AccessBlob,
 		s3SecretBlob,
 		nullable(sm.backupConfig.S3PathPrefix),
-		boolToInt(sm.backupConfig.HasMasterPassword),
+		domain.BoolToInt(sm.backupConfig.HasMasterPassword),
 		sm.backupConfig.CredentialsUnlockTime,
 		int64(sm.backupConfig.CredentialUnlockAttempts),
 		sm.backupConfig.CredentialLockedUntil,
@@ -761,20 +761,6 @@ func parseTargetType(s string) domain.BackupTargetType {
 	default:
 		return domain.BackupTargetLocal
 	}
-}
-
-func parseDefaultMode(s string) domain.DefaultMode {
-	if s == "stopwatch" {
-		return domain.DefaultModeStopwatch
-	}
-	return domain.DefaultModeCountdown
-}
-
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }
 
 func nullable(s string) any {

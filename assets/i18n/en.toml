@@ -320,4 +320,3 @@ error = "❌ Connection error"
 [errors.offline]
 title = "⚠️ Offline mode"
 message = "Backend service is unavailable. Some features may be limited. Please check network or restart the app."
-

@@ -70,6 +70,7 @@ interface SettingsConfig {
   backup_webdav_url?: string;
   backup_webdav_username?: string;
   backup_webdav_password?: string;
+  backup_webdav_path_prefix?: string;
   backup_s3_endpoint?: string;
   backup_s3_bucket?: string;
   backup_s3_region?: string;
@@ -215,6 +216,7 @@ export const SettingsPage: FunctionalComponent<SettingsPageProps> = ({
           backup_webdav_url: bc.webdav_url ?? '',
           backup_webdav_username: bc.webdav_username ?? '',
           backup_webdav_password: bc.webdav_password ?? '',
+          backup_webdav_path_prefix: bc.webdav_path_prefix ?? 'little_timer/',
           backup_s3_endpoint: bc.s3_endpoint ?? '',
           backup_s3_bucket: bc.s3_bucket ?? '',
           backup_s3_region: bc.s3_region ?? '',
@@ -351,6 +353,7 @@ export const SettingsPage: FunctionalComponent<SettingsPageProps> = ({
         webdav_url: config.backup_webdav_url ?? '',
         webdav_username: config.backup_webdav_username ?? '',
         webdav_password: config.backup_webdav_password ?? '',
+        webdav_path_prefix: config.backup_webdav_path_prefix ?? 'little_timer/',
         s3_endpoint: config.backup_s3_endpoint ?? '',
         s3_bucket: config.backup_s3_bucket ?? '',
         s3_region: config.backup_s3_region ?? '',

@@ -6,12 +6,11 @@
 //
 // Routes:
 //
-//   GET  /api/settings
-//   POST /api/settings
+//	GET  /api/settings
+//	POST /api/settings
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -20,7 +19,7 @@ import (
 )
 
 // handleSettingsGet mirrors `handleGetSettings`.
-func handleSettingsGet(c *gin.Context) {
+func SettingsGet(c *gin.Context) {
 	a := appFromCtx(c)
 	cfg := a.Settings.Config()
 	c.JSON(http.StatusOK, cfg)
@@ -29,7 +28,7 @@ func handleSettingsGet(c *gin.Context) {
 // handleSettingsUpdate mirrors `handleUpdateSettings`.  Body is the
 // partial SettingsConfig object — SettingsManager parses it via
 // `parseSettingsFromJSON` which is tolerant of missing fields.
-func handleSettingsUpdate(c *gin.Context) {
+func SettingsUpdate(c *gin.Context) {
 	a := appFromCtx(c)
 	raw, err := c.GetRawData()
 	if err != nil {
@@ -44,14 +43,4 @@ func handleSettingsUpdate(c *gin.Context) {
 	// refuses to encode a nil interface).
 	out := gin.H{"status": "settings_updated"}
 	c.JSON(http.StatusOK, out)
-}
-
-// jsonMustMarshal is a tiny convenience for handlers that build
-// ad-hoc JSON.  Not used by the current handlers but kept handy.
-func jsonMustMarshal(v any) string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return ""
-	}
-	return string(b)
 }

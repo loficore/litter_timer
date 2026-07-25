@@ -6,7 +6,6 @@ describe("TimerProgress", () => {
   const habitDetail = {
     today_seconds: 900,
     goal_seconds: 1500,
-    streak: 5,
   };
 
   it("正计时模式且有习惯详情时应该渲染进度条", () => {
@@ -88,32 +87,6 @@ describe("TimerProgress", () => {
 
     const progressBar = container.querySelector(".progress-bar");
     expect(progressBar?.className).toContain("from-[var(--accent-color)]");
-  });
-
-  it("有连胜时应该显示连胜信息", () => {
-    render(
-      <TimerProgress
-        habitDetail={habitDetail}
-        elapsedSeconds={0}
-        isFinished={false}
-        isStopwatchMode={true}
-      />
-    );
-
-    expect(screen.getByText((content) => content.includes("天"))).toBeDefined();
-  });
-
-  it("无连胜时不应该显示连胜信息", () => {
-    const { container } = render(
-      <TimerProgress
-        habitDetail={{ ...habitDetail, streak: 0 }}
-        elapsedSeconds={0}
-        isFinished={false}
-        isStopwatchMode={true}
-      />
-    );
-
-    expect(container.textContent).not.toContain("🔥");
   });
 
   it("应该计算累计时间包含已用时间", () => {

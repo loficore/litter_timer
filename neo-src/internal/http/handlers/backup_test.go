@@ -74,7 +74,7 @@ func TestHandleBackupConfigGet(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/backup/config", nil)
 	c.Set("app", a)
 
-	handleBackupConfigGet(c)
+	BackupConfigGet(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -102,7 +102,7 @@ func TestHandleBackupConfigUpdate(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/config", body)
 	c.Set("app", a)
 
-	handleBackupConfigUpdate(c)
+	BackupConfigUpdate(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -126,7 +126,7 @@ func TestHandleBackupConfigUpdate_CloudWithoutMasterPassword(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/config", body)
 	c.Set("app", a)
 
-	handleBackupConfigUpdate(c)
+	BackupConfigUpdate(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d", w.Code)
@@ -149,7 +149,7 @@ func TestHandleBackupCreate(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/create", nil)
 	c.Set("app", a)
 
-	handleBackupCreate(c)
+	BackupCreate(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -181,7 +181,7 @@ func TestHandleBackupCreate_NoBackupManager(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/create", nil)
 	c.Set("app", a)
 
-	handleBackupCreate(c)
+	BackupCreate(c)
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Errorf("code = %d, want 503", w.Code)
@@ -196,7 +196,7 @@ func TestHandleBackupRestore(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/create", nil)
 	c.Set("app", a)
-	handleBackupCreate(c)
+	BackupCreate(c)
 
 	var created map[string]any
 	_ = json.Unmarshal(w.Body.Bytes(), &created)
@@ -208,7 +208,7 @@ func TestHandleBackupRestore(t *testing.T) {
 	c2.Request = httptest.NewRequest(http.MethodPost, "/api/backup/restore", body)
 	c2.Set("app", a)
 
-	handleBackupRestore(c2)
+	BackupRestore(c2)
 
 	if w2.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w2.Code, w2.Body.String())
@@ -232,7 +232,7 @@ func TestHandleBackupRestore_MissingName(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/restore", body)
 	c.Set("app", a)
 
-	handleBackupRestore(c)
+	BackupRestore(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -247,7 +247,7 @@ func TestHandleBackupRestoreByName(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/create", nil)
 	c.Set("app", a)
-	handleBackupCreate(c)
+	BackupCreate(c)
 
 	var created map[string]any
 	_ = json.Unmarshal(w.Body.Bytes(), &created)
@@ -258,7 +258,7 @@ func TestHandleBackupRestoreByName(t *testing.T) {
 	c2.Request = httptest.NewRequest(http.MethodPost, "/api/backup/restore/"+backupName, nil)
 	c2.Set("app", a)
 
-	handleBackupRestoreByName(c2)
+	BackupRestoreByName(c2)
 
 	if w2.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w2.Code, w2.Body.String())
@@ -281,7 +281,7 @@ func TestHandleBackupRestoreByName_InvalidName(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/restore/../../../etc/passwd", nil)
 	c.Set("app", a)
 
-	handleBackupRestoreByName(c)
+	BackupRestoreByName(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -296,14 +296,14 @@ func TestHandleBackupList(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/create", nil)
 	c.Set("app", a)
-	handleBackupCreate(c)
+	BackupCreate(c)
 
 	w2 := httptest.NewRecorder()
 	c2, _ := gin.CreateTestContext(w2)
 	c2.Request = httptest.NewRequest(http.MethodGet, "/api/backup/list", nil)
 	c2.Set("app", a)
 
-	handleBackupList(c2)
+	BackupList(c2)
 
 	if w2.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w2.Code, w2.Body.String())
@@ -327,7 +327,7 @@ func TestHandleBackupList_NoBackupManager(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/backup/list", nil)
 	c.Set("app", a)
 
-	handleBackupList(c)
+	BackupList(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d", w.Code)
@@ -351,14 +351,14 @@ func TestHandleBackupInfo(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/create", nil)
 	c.Set("app", a)
-	handleBackupCreate(c)
+	BackupCreate(c)
 
 	w2 := httptest.NewRecorder()
 	c2, _ := gin.CreateTestContext(w2)
 	c2.Request = httptest.NewRequest(http.MethodGet, "/api/backup/info", nil)
 	c2.Set("app", a)
 
-	handleBackupInfo(c2)
+	BackupInfo(c2)
 
 	if w2.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w2.Code, w2.Body.String())
@@ -381,7 +381,7 @@ func TestHandleBackupDeleteByName(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/create", nil)
 	c.Set("app", a)
-	handleBackupCreate(c)
+	BackupCreate(c)
 
 	var created map[string]any
 	_ = json.Unmarshal(w.Body.Bytes(), &created)
@@ -392,7 +392,7 @@ func TestHandleBackupDeleteByName(t *testing.T) {
 	c2.Request = httptest.NewRequest(http.MethodDelete, "/api/backup/delete/"+backupName, nil)
 	c2.Set("app", a)
 
-	handleBackupDeleteByName(c2)
+	BackupDeleteByName(c2)
 
 	if w2.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w2.Code, w2.Body.String())
@@ -415,7 +415,7 @@ func TestHandleBackupVerify(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/verify", nil)
 	c.Set("app", a)
 
-	handleBackupVerify(c)
+	BackupVerify(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -439,7 +439,7 @@ func TestHandleBackupUnlock(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/unlock", body)
 	c.Set("app", a)
 
-	handleBackupUnlock(c)
+	BackupUnlock(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -463,7 +463,7 @@ func TestHandleBackupUnlock_MissingPassword(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/unlock", body)
 	c.Set("app", a)
 
-	handleBackupUnlock(c)
+	BackupUnlock(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -478,7 +478,7 @@ func TestHandleBackupLock(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/lock", nil)
 	c.Set("app", a)
 
-	handleBackupLock(c)
+	BackupLock(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -501,7 +501,7 @@ func TestHandleMasterPasswordGet(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/backup/master-password", nil)
 	c.Set("app", a)
 
-	handleMasterPasswordGet(c)
+	MasterPasswordGet(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -528,7 +528,7 @@ func TestHandleMasterPasswordSet(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/master-password", body)
 	c.Set("app", a)
 
-	handleMasterPasswordSet(c)
+	MasterPasswordSet(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -552,7 +552,7 @@ func TestHandleMasterPasswordSet_TooShort(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/master-password", body)
 	c.Set("app", a)
 
-	handleMasterPasswordSet(c)
+	MasterPasswordSet(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -567,7 +567,7 @@ func TestHandleAuthStatus(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
 	c.Set("app", a)
 
-	handleAuthStatus(c)
+	AuthStatus(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -593,7 +593,7 @@ func TestHandleAuthEnable(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/auth/enable", nil)
 	c.Set("app", a)
 
-	handleAuthEnable(c)
+	AuthEnable(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -619,7 +619,7 @@ func TestHandleAuthDisable(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/auth/disable", nil)
 	c.Set("app", a)
 
-	handleAuthDisable(c)
+	AuthDisable(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())

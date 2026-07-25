@@ -23,9 +23,6 @@ importers:
       preact:
         specifier: ^10.28.2
         version: 10.29.7
-      preact-router:
-        specifier: ^4.1.2
-        version: 4.1.2(preact@10.29.7)
       toml:
         specifier: ^4.1.1
         version: 4.3.0
@@ -1976,11 +1973,6 @@ packages:
   postcss@8.5.19:
     resolution: {integrity: sha512-Mz8SaolMd8nB+G13WkORcxQKHZ/NE4xXevtkJHVuG+guo9/wYKlIMTKAqGdEmYOXR2ijPjTYNHssizdaVSUNdQ==}
     engines: {node: ^10 || ^12 || >=14}
-
-  preact-router@4.1.2:
-    resolution: {integrity: sha512-uICUaUFYh+XQ+6vZtQn1q+X6rSqwq+zorWOCLWPF5FAsQh3EJ+RsDQ9Ee+fjk545YWQHfUxhrBAaemfxEnMOUg==}
-    peerDependencies:
-      preact: '>=10'
 
   preact@10.29.7:
     resolution: {integrity: sha512-DCHYrK/B10yUD3ZjLfhZ3WIE/9Vf9VFUODcRE2dRomTYDpJk6z6L9wecSfhfE6M9ZTHUdyQkoC46arIDhEV84Q==}
@@ -4244,10 +4236,6 @@ snapshots:
       nanoid: 3.3.16
       picocolors: 1.1.1
       source-map-js: 1.2.1
-
-  preact-router@4.1.2(preact@10.29.7):
-    dependencies:
-      preact: 10.29.7
 
   preact@10.29.7: {}
 

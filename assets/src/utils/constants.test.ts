@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isAllowedWallpaperUrl, ALLOWED_WALLPAPER_DOMAINS } from './constants';
+import { isAllowedWallpaperUrl } from './constants';
 
 describe('isAllowedWallpaperUrl', () => {
   // Allowed: imgur.com subdomains and exact

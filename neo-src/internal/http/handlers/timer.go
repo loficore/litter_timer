@@ -7,16 +7,16 @@
 //
 // Endpoints (paths match Zig exactly):
 //
-//   GET  /api/state             → handleGetState
-//   GET  /api/timer/progress    → handleGetProgress
-//   POST /api/start             → handleStart
-//   POST /api/pause             → handlePause
-//   POST /api/reset             → handleReset
-//   POST /api/finish            → handleFinish
-//   POST /api/mode              → handleModeSwitch
-//   POST /api/timer/rest        → handleStartRest
-//   GET  /api/timer/config      → handleGetConfig
-//   POST /api/timer/config      → handleUpdateConfig
+//	GET  /api/state             → handleGetState
+//	GET  /api/timer/progress    → handleGetProgress
+//	POST /api/start             → handleStart
+//	POST /api/pause             → handlePause
+//	POST /api/reset             → handleReset
+//	POST /api/finish            → handleFinish
+//	POST /api/mode              → handleModeSwitch
+//	POST /api/timer/rest        → handleStartRest
+//	GET  /api/timer/config      → handleGetConfig
+//	POST /api/timer/config      → handleUpdateConfig
 package handlers
 
 import (
@@ -50,16 +50,16 @@ func appFromCtx(c *gin.Context) *app.App {
 // stable across Go versions (Gin's JSON encoder sorts keys).
 func buildStateResponse(state *domain.ClockState, modeKey string, timezone int8, habitID *int64) gin.H {
 	out := gin.H{
-		"time":            state.GetTimeInfo(),
-		"elapsed":         state.GetElapsedSeconds(),
-		"mode":            modeKey,
-		"is_running":      !state.IsPaused(),
-		"is_finished":     state.IsFinished(),
-		"in_rest":         state.InRest(),
-		"loop_remaining":  state.GetLoopRemaining(),
-		"loop_total":      state.GetLoopTotal(),
-		"rest_remaining":  state.GetRestRemainingTime(),
-		"timezone":        timezone,
+		"time":           state.GetTimeInfo(),
+		"elapsed":        state.GetElapsedSeconds(),
+		"mode":           modeKey,
+		"is_running":     !state.IsPaused(),
+		"is_finished":    state.IsFinished(),
+		"in_rest":        state.InRest(),
+		"loop_remaining": state.GetLoopRemaining(),
+		"loop_total":     state.GetLoopTotal(),
+		"rest_remaining": state.GetRestRemainingTime(),
+		"timezone":       timezone,
 	}
 	if habitID != nil {
 		out["habit_id"] = *habitID
@@ -80,7 +80,7 @@ func modeKey(m domain.ModeEnum) string {
 
 // handleGetState mirrors `handleGetState` — returns the current clock
 // state as JSON.
-func handleGetState(c *gin.Context) {
+func TimerState(c *gin.Context) {
 	a := appFromCtx(c)
 	state := a.Clock.Update()
 	tz := a.Settings.Config().Basic.Timezone
@@ -99,7 +99,7 @@ func handleGetState(c *gin.Context) {
 // handleGetProgress mirrors `handleGetProgress` — returns the live
 // progress + mode + paused/finished flags.  Lazily loads progress if
 // no current session is active.
-func handleGetProgress(c *gin.Context) {
+func TimerProgress(c *gin.Context) {
 	a := appFromCtx(c)
 
 	a.RLock()
@@ -116,15 +116,15 @@ func handleGetProgress(c *gin.Context) {
 
 	state := a.Clock.Update()
 	c.JSON(http.StatusOK, gin.H{
-		"session_id":       sessionID,
-		"habit_id":         habitID,
-		"mode":             modeKey(state.GetMode()),
-		"is_running":       !state.IsPaused(),
-		"is_paused":        state.IsPaused(),
-		"is_finished":      state.IsFinished(),
-		"elapsed_seconds":  state.GetElapsedSeconds(),
+		"session_id":        sessionID,
+		"habit_id":          habitID,
+		"mode":              modeKey(state.GetMode()),
+		"is_running":        !state.IsPaused(),
+		"is_paused":         state.IsPaused(),
+		"is_finished":       state.IsFinished(),
+		"elapsed_seconds":   state.GetElapsedSeconds(),
 		"remaining_seconds": state.GetRemainingSeconds(),
-		"in_rest":          state.InRest(),
+		"in_rest":           state.InRest(),
 	})
 }
 
@@ -135,15 +135,15 @@ func handleGetProgress(c *gin.Context) {
 // startRequest is the JSON body of `POST /api/start`.  All fields are
 // optional — defaults mirror the Zig source.
 type startRequest struct {
-	HabitID       *int64 `json:"habit_id,omitempty"`
-	Mode          string `json:"mode,omitempty"`
-	WorkDuration  int64  `json:"work_duration,omitempty"`
-	RestDuration  int64  `json:"rest_duration,omitempty"`
-	LoopCount     int64  `json:"loop_count,omitempty"`
+	HabitID      *int64 `json:"habit_id,omitempty"`
+	Mode         string `json:"mode,omitempty"`
+	WorkDuration int64  `json:"work_duration,omitempty"`
+	RestDuration int64  `json:"rest_duration,omitempty"`
+	LoopCount    int64  `json:"loop_count,omitempty"`
 }
 
 // handleStart mirrors `handleStart`.  Body: {habit_id?, mode?, work_duration?, rest_duration?, loop_count?}.
-func handleStart(c *gin.Context) {
+func TimerStart(c *gin.Context) {
 	a := appFromCtx(c)
 
 	var req startRequest
@@ -233,7 +233,7 @@ func handleStart(c *gin.Context) {
 // -----------------------------------------------------------------------------
 
 // handlePause mirrors `handlePause`.
-func handlePause(c *gin.Context) {
+func TimerPause(c *gin.Context) {
 	a := appFromCtx(c)
 	a.Lock()
 	defer a.Unlock()
@@ -247,7 +247,7 @@ func handlePause(c *gin.Context) {
 // -----------------------------------------------------------------------------
 
 // handleReset mirrors `handleReset`.
-func handleReset(c *gin.Context) {
+func TimerReset(c *gin.Context) {
 	a := appFromCtx(c)
 	a.Lock()
 	defer a.Unlock()
@@ -263,7 +263,7 @@ func handleReset(c *gin.Context) {
 
 // handleFinish mirrors `handleFinish`.  On success creates a daily
 // session row tied to the current habit so habit stats stay in sync.
-func handleFinish(c *gin.Context) {
+func TimerFinish(c *gin.Context) {
 	a := appFromCtx(c)
 	a.Lock()
 	defer a.Unlock()
@@ -280,7 +280,7 @@ func handleFinish(c *gin.Context) {
 		state := a.Clock.Update()
 		elapsedSeconds := state.GetElapsedSeconds()
 		if habitID != nil && elapsedSeconds > 0 {
-			if _, err := a.SQLite.Timers().CreateSession(*habitID, elapsedSeconds, 1, todayString()); err != nil {
+			if _, err := a.SQLite.Timers().CreateSession(*habitID, elapsedSeconds, 1, domain.TodayString(a.Settings.Config().Basic.Timezone)); err != nil {
 				log.Printf("failed to create fallback session: %v", err)
 			}
 		}
@@ -293,7 +293,7 @@ func handleFinish(c *gin.Context) {
 	}
 
 	if habitID != nil && elapsed > 0 {
-		if _, err := a.SQLite.Timers().CreateSession(*habitID, elapsed, 1, todayString()); err != nil {
+		if _, err := a.SQLite.Timers().CreateSession(*habitID, elapsed, 1, domain.TodayString(a.Settings.Config().Basic.Timezone)); err != nil {
 			log.Printf("failed to create session at end: %v", err)
 		}
 	}
@@ -312,7 +312,7 @@ func handleFinish(c *gin.Context) {
 
 // handleModeSwitch mirrors `handleModeChange`.  Body is a JSON object
 // `{"mode":"countdown"|"stopwatch"}`.
-func handleModeSwitch(c *gin.Context) {
+func TimerMode(c *gin.Context) {
 	a := appFromCtx(c)
 
 	var body struct {
@@ -356,7 +356,7 @@ func handleModeSwitch(c *gin.Context) {
 
 // handleStartRest mirrors `handleStartRest` — switches the clock into
 // a 5-minute countdown and starts it.
-func handleStartRest(c *gin.Context) {
+func TimerStartRest(c *gin.Context) {
 	a := appFromCtx(c)
 	const restSeconds uint64 = DefaultRestDuration
 
@@ -389,7 +389,7 @@ func handleStartRest(c *gin.Context) {
 // Mirrors the Zig GET branch — there's no dedicated handler in std_server.zig,
 // but the route is referenced in task-list comments, so we wire it through
 // to the active state.
-func handleConfig(c *gin.Context) {
+func TimerConfig(c *gin.Context) {
 	a := appFromCtx(c)
 	cfg := a.Settings.BuildClockConfig()
 	c.JSON(http.StatusOK, gin.H{
@@ -408,7 +408,7 @@ func handleConfig(c *gin.Context) {
 
 // handleUpdateConfig applies a partial config update.  Body mirrors the
 // ClockTaskConfig shape with the same JSON field names as `GET`.
-func handleUpdateConfig(c *gin.Context) {
+func TimerUpdateConfig(c *gin.Context) {
 	a := appFromCtx(c)
 	var req domain.ClockTaskConfig
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -423,10 +423,3 @@ func handleUpdateConfig(c *gin.Context) {
 // -----------------------------------------------------------------------------
 // Internals.
 // -----------------------------------------------------------------------------
-
-// todayString returns today's date as "YYYY-MM-DD".  Mirrors the Zig
-// helper inside `handleFinish` / `handleGetHabitDetail`.
-func todayString() string {
-	now := time.Now().UTC()
-	return now.Format("2006-01-02")
-}

@@ -3,24 +3,24 @@
 // File `backup.go` ports the backup, master-password, and auth
 // handlers from std_server.zig.  Routes (paths match Zig exactly):
 //
-//   GET  /api/backup/config
-//   POST /api/backup/config
-//   POST /api/backup/create
-//   POST /api/backup/restore
-//   POST /api/backup/restore/:name
-//   GET  /api/backup/list
-//   GET  /api/backup/info
-//   DELETE /api/backup/delete/:name
-//   DELETE /api/backup/:id
-//   POST /api/backup/verify
-//   POST /api/backup/unlock
-//   POST /api/backup/lock
-//   GET  /api/backup/master-password
-//   POST /api/backup/master-password
+//	GET  /api/backup/config
+//	POST /api/backup/config
+//	POST /api/backup/create
+//	POST /api/backup/restore
+//	POST /api/backup/restore/:name
+//	GET  /api/backup/list
+//	GET  /api/backup/info
+//	DELETE /api/backup/delete/:name
+//	DELETE /api/backup/:id
+//	POST /api/backup/verify
+//	POST /api/backup/unlock
+//	POST /api/backup/lock
+//	GET  /api/backup/master-password
+//	POST /api/backup/master-password
 //
-//   GET  /api/auth/status
-//   POST /api/auth/enable
-//   POST /api/auth/disable
+//	GET  /api/auth/status
+//	POST /api/auth/enable
+//	POST /api/auth/disable
 package handlers
 
 import (
@@ -39,7 +39,7 @@ import (
 
 // handleBackupConfigGet mirrors `handleGetBackupConfig`.  Returns the
 // persisted BackupConfig with secrets masked (`"******"`).
-func handleBackupConfigGet(c *gin.Context) {
+func BackupConfigGet(c *gin.Context) {
 	a := appFromCtx(c)
 	cfg := a.Settings.BackupConfig()
 
@@ -65,7 +65,7 @@ func handleBackupConfigGet(c *gin.Context) {
 // handleBackupConfigUpdate mirrors `handleUpdateBackupConfig`.  When
 // switching to a cloud target the handler enforces the master-password
 // + unlock checks before persisting the change.
-func handleBackupConfigUpdate(c *gin.Context) {
+func BackupConfigUpdate(c *gin.Context) {
 	a := appFromCtx(c)
 	raw, err := c.GetRawData()
 	if err != nil {
@@ -132,7 +132,7 @@ func handleBackupConfigUpdate(c *gin.Context) {
 // handleBackupCreate mirrors `handleBackupCreate`.  Delegates to the
 // BackupManager when one is wired into the App; otherwise responds
 // with a 503-ish error.
-func handleBackupCreate(c *gin.Context) {
+func BackupCreate(c *gin.Context) {
 	a := appFromCtx(c)
 	if a.Backup == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "backup not configured"})
@@ -178,7 +178,7 @@ func handleBackupCreate(c *gin.Context) {
 // -----------------------------------------------------------------------------
 
 // handleBackupRestore mirrors `handleBackupRestore`.  Body: {name}.
-func handleBackupRestore(c *gin.Context) {
+func BackupRestore(c *gin.Context) {
 	a := appFromCtx(c)
 	if a.Backup == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "backup not configured"})
@@ -222,7 +222,7 @@ func handleBackupRestore(c *gin.Context) {
 
 // handleBackupRestoreByName mirrors `handleBackupRestoreByName` —
 // `POST /api/backup/restore/:name`.
-func handleBackupRestoreByName(c *gin.Context) {
+func BackupRestoreByName(c *gin.Context) {
 	a := appFromCtx(c)
 	if a.Backup == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "backup not configured"})
@@ -245,7 +245,7 @@ func handleBackupRestoreByName(c *gin.Context) {
 // -----------------------------------------------------------------------------
 
 // handleBackupList mirrors `handleBackupList`.
-func handleBackupList(c *gin.Context) {
+func BackupList(c *gin.Context) {
 	a := appFromCtx(c)
 	if a.Backup == nil {
 		c.JSON(http.StatusOK, gin.H{"success": true, "backups": []any{}})
@@ -264,16 +264,16 @@ func handleBackupList(c *gin.Context) {
 // -----------------------------------------------------------------------------
 
 // handleBackupInfo mirrors `handleBackupInfo`.
-func handleBackupInfo(c *gin.Context) {
+func BackupInfo(c *gin.Context) {
 	a := appFromCtx(c)
 	if a.Backup == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"info": gin.H{
-				"total_backups":   0,
+				"total_backups":    0,
 				"total_size_bytes": 0,
-				"oldest_backup":   nil,
-				"newest_backup":   nil,
+				"oldest_backup":    nil,
+				"newest_backup":    nil,
 			},
 		})
 		return
@@ -294,7 +294,7 @@ func handleBackupInfo(c *gin.Context) {
 // -----------------------------------------------------------------------------
 
 // handleBackupDeleteByName mirrors `handleBackupDeleteByName`.
-func handleBackupDeleteByName(c *gin.Context) {
+func BackupDeleteByName(c *gin.Context) {
 	a := appFromCtx(c)
 	if a.Backup == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "backup not configured"})
@@ -315,7 +315,7 @@ func handleBackupDeleteByName(c *gin.Context) {
 // handleBackupDelete mirrors `handleBackupDelete` — generic
 // `DELETE /api/backup/:id` form (where :id is interpreted as the
 // backup name when there's no `/delete/` segment).
-func handleBackupDelete(c *gin.Context) {
+func BackupDelete(c *gin.Context) {
 	a := appFromCtx(c)
 	if a.Backup == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "backup not configured"})
@@ -340,7 +340,7 @@ func handleBackupDelete(c *gin.Context) {
 // handleBackupVerify mirrors `handleBackupVerify`.  Calls TestConnection
 // on the configured adapter (or, for the local adapter, simply
 // verifies the target dir is reachable).
-func handleBackupVerify(c *gin.Context) {
+func BackupVerify(c *gin.Context) {
 	a := appFromCtx(c)
 	if a.Backup == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "backup not configured"})
@@ -362,7 +362,7 @@ func handleBackupVerify(c *gin.Context) {
 // -----------------------------------------------------------------------------
 
 // handleBackupUnlock mirrors `handleBackupUnlock`.  Body: {password}.
-func handleBackupUnlock(c *gin.Context) {
+func BackupUnlock(c *gin.Context) {
 	a := appFromCtx(c)
 	var req struct {
 		Password string `json:"password"`
@@ -373,13 +373,13 @@ func handleBackupUnlock(c *gin.Context) {
 	}
 	res := a.UnlockCredentials(req.Password)
 	c.JSON(http.StatusOK, gin.H{
-		"success":       res.Success,
+		"success":      res.Success,
 		"locked_until": res.LockedUntil,
 	})
 }
 
 // handleBackupLock mirrors `handleBackupLock`.
-func handleBackupLock(c *gin.Context) {
+func BackupLock(c *gin.Context) {
 	a := appFromCtx(c)
 	a.LockCredentials()
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -390,14 +390,14 @@ func handleBackupLock(c *gin.Context) {
 // -----------------------------------------------------------------------------
 
 // handleMasterPasswordGet mirrors `handleGetMasterPasswordStatus`.
-func handleMasterPasswordGet(c *gin.Context) {
+func MasterPasswordGet(c *gin.Context) {
 	a := appFromCtx(c)
 	c.JSON(http.StatusOK, a.GetMasterPasswordStatus())
 }
 
 // handleMasterPasswordSet mirrors `handleSetMasterPassword`.  Body:
 // {password}.  Minimum 4 characters (matches the Zig validator).
-func handleMasterPasswordSet(c *gin.Context) {
+func MasterPasswordSet(c *gin.Context) {
 	a := appFromCtx(c)
 	var req struct {
 		Password string `json:"password"`
@@ -423,7 +423,7 @@ func handleMasterPasswordSet(c *gin.Context) {
 
 // handleAuthStatus mirrors `handleAuthStatus`.  Public route — the auth
 // middleware lets it through without a token.
-func handleAuthStatus(c *gin.Context) {
+func AuthStatus(c *gin.Context) {
 	a := appFromCtx(c)
 	cfg := a.Settings.Config().Auth
 	c.JSON(http.StatusOK, gin.H{
@@ -435,7 +435,7 @@ func handleAuthStatus(c *gin.Context) {
 // handleAuthEnable mirrors `handleAuthEnable`.  Generates a fresh token,
 // persists it via SettingsManager.UpdateAuth, and returns it in the
 // response so the client can save it.
-func handleAuthEnable(c *gin.Context) {
+func AuthEnable(c *gin.Context) {
 	a := appFromCtx(c)
 	token := app.GenerateToken()
 	newAuth := a.Settings.Config().Auth
@@ -449,7 +449,7 @@ func handleAuthEnable(c *gin.Context) {
 }
 
 // handleAuthDisable mirrors `handleAuthDisable`.
-func handleAuthDisable(c *gin.Context) {
+func AuthDisable(c *gin.Context) {
 	a := appFromCtx(c)
 	newAuth := a.Settings.Config().Auth
 	newAuth.AuthEnabled = false

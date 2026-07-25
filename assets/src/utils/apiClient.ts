@@ -10,7 +10,6 @@ import type {
   HabitSet,
   Habit,
   HabitDetail,
-  HabitStreak,
   Session,
   CreateSessionResult,
   BackupConfig,
@@ -330,18 +329,6 @@ export class APIClient {
         if (endDate) params.set("end_date", endDate);
 
         return this.fetchJson<Session[]>(`${this.baseUrl}/api/sessions?${params.toString()}`);
-    }
-
-    /**
-     * 获取习惯连胜
-     * @param {number} habitId 习惯 ID
-     * @param {number} goalSeconds 目标时长
-     * @returns {Promise<HabitStreak>} 返回一个 Promise，解析为包含习惯 ID 和连胜数的对象
-     */
-    async getHabitStreak(habitId: number, goalSeconds?: number): Promise<HabitStreak> {
-        const params = new URLSearchParams();
-        if (goalSeconds) params.set("goal_seconds", goalSeconds.toString());
-        return this.fetchJson<HabitStreak>(`${this.baseUrl}/api/habits/${habitId}/streak?${params.toString()}`);
     }
 
     /**

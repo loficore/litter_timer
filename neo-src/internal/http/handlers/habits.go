@@ -3,24 +3,24 @@
 // File `habits.go` ports the habit-related handlers from std_server.zig.
 // Routes (paths match Zig exactly):
 //
-//   GET    /api/habit-sets                   → handleHabitSetList
-//   POST   /api/habit-sets                   → handleHabitSetCreate
-//   PUT    /api/habit-sets/:id               → handleHabitSetUpdate
-//   DELETE /api/habit-sets/:id               → handleHabitSetDelete
+//	GET    /api/habit-sets                   → handleHabitSetList
+//	POST   /api/habit-sets                   → handleHabitSetCreate
+//	PUT    /api/habit-sets/:id               → handleHabitSetUpdate
+//	DELETE /api/habit-sets/:id               → handleHabitSetDelete
 //
-//   GET    /api/habits                       → handleHabitList
-//   POST   /api/habits                       → handleHabitCreate
-//   PUT    /api/habits/:id                   → handleHabitUpdate
-//   DELETE /api/habits/:id                   → handleHabitDelete
-//   GET    /api/habits/:id/detail            → handleHabitDetail
+//	GET    /api/habits                       → handleHabitList
+//	POST   /api/habits                       → handleHabitCreate
+//	PUT    /api/habits/:id                   → handleHabitUpdate
+//	DELETE /api/habits/:id                   → handleHabitDelete
+//	GET    /api/habits/:id/detail            → handleHabitDetail
 //
-//   POST   /api/sessions                     → handleSessionCreate
-//   GET    /api/sessions                     → handleSessionList
+//	POST   /api/sessions                     → handleSessionCreate
+//	GET    /api/sessions                     → handleSessionList
 //
-//   POST   /api/timer-sessions               → handleTimerSessionCreate
-//   GET    /api/timer-sessions               → handleTimerSessionList
-//   PUT    /api/timer-sessions/:id           → handleTimerSessionUpdate
-//   DELETE /api/timer-sessions/:id           → handleTimerSessionDelete
+//	POST   /api/timer-sessions               → handleTimerSessionCreate
+//	GET    /api/timer-sessions               → handleTimerSessionList
+//	PUT    /api/timer-sessions/:id           → handleTimerSessionUpdate
+//	DELETE /api/timer-sessions/:id           → handleTimerSessionDelete
 package handlers
 
 import (
@@ -30,6 +30,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"little-timer/internal/domain"
 	"little-timer/internal/storage"
 )
 
@@ -57,50 +58,30 @@ func parsePagination(c *gin.Context) (limit, offset int, valid bool) {
 	return limit, offset, true
 }
 
-// habitNameExistsInSet checks if a habit with the given name already exists in the specified set.
-// excludeHabitID is used to skip the habit when checking for duplicates during updates.
-func habitNameExistsInSet(c *gin.Context, setID int64, name string, excludeHabitID *int64) (bool, error) {
-	a := appFromCtx(c)
-	const limit, offset = 100, 0
-	habits, err := a.SQLite.Habits().ListBySet(setID, limit, offset)
-	if err != nil {
-		return false, err
-	}
-	for _, h := range habits {
-		if excludeHabitID != nil && h.ID == *excludeHabitID {
-			continue
-		}
-		if h.Name == name {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 // -----------------------------------------------------------------------------
 // /api/habit-sets
 // -----------------------------------------------------------------------------
 
 // handleHabitSetCreate mirrors `handleCreateHabitSet`.
 // Body: {name, description?, color?}.
-func handleHabitSetCreate(c *gin.Context) {
+func HabitSetCreate(c *gin.Context) {
 	a := appFromCtx(c)
 
-		var req struct {
-			Name        string `json:"name"`
-			Description string `json:"description"`
-			Color       string `json:"color"`
-		}
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Invalid JSON"})
-			return
-		}
-		if req.Name == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Missing name"})
-			return
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Color       string `json:"color"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Invalid JSON"})
+		return
+	}
+	if req.Name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Missing name"})
+		return
 	}
 	if req.Color == "" {
-		req.Color = "#6366f1"
+		req.Color = domain.DefaultColor
 	}
 
 	id, err := a.SQLite.HabitSets().Create(req.Name, req.Description, req.Color)
@@ -117,7 +98,7 @@ func handleHabitSetCreate(c *gin.Context) {
 }
 
 // handleHabitSetList mirrors `handleGetHabitSets`.
-func handleHabitSetList(c *gin.Context) {
+func HabitSetList(c *gin.Context) {
 	a := appFromCtx(c)
 	limit, offset, ok := parsePagination(c)
 	if !ok {
@@ -133,7 +114,7 @@ func handleHabitSetList(c *gin.Context) {
 }
 
 // handleHabitSetUpdate mirrors `handleUpdateHabitSet`.
-func handleHabitSetUpdate(c *gin.Context) {
+func HabitSetUpdate(c *gin.Context) {
 	a := appFromCtx(c)
 	id, err := pathID(c, "/api/habit-sets/")
 	if err != nil {
@@ -156,7 +137,7 @@ func handleHabitSetUpdate(c *gin.Context) {
 		return
 	}
 	if req.Color == "" {
-		req.Color = "#6366f1"
+		req.Color = domain.DefaultColor
 	}
 	if err := a.SQLite.HabitSets().Update(id, req.Name, req.Description, req.Color, req.Wallpaper); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to update habit set"})
@@ -172,7 +153,7 @@ func handleHabitSetUpdate(c *gin.Context) {
 }
 
 // handleHabitSetDelete mirrors `handleDeleteHabitSet`.
-func handleHabitSetDelete(c *gin.Context) {
+func HabitSetDelete(c *gin.Context) {
 	a := appFromCtx(c)
 	id, err := pathID(c, "/api/habit-sets/")
 	if err != nil {
@@ -192,7 +173,7 @@ func handleHabitSetDelete(c *gin.Context) {
 
 // handleHabitCreate mirrors `handleCreateHabit`.
 // Body: {set_id, name, goal_seconds?, color?}.
-func handleHabitCreate(c *gin.Context) {
+func HabitCreate(c *gin.Context) {
 	a := appFromCtx(c)
 
 	var req struct {
@@ -210,13 +191,13 @@ func handleHabitCreate(c *gin.Context) {
 		return
 	}
 	if req.GoalSeconds == 0 {
-		req.GoalSeconds = 1500
+		req.GoalSeconds = domain.DefaultGoalSeconds
 	}
 	if req.Color == "" {
-		req.Color = "#6366f1"
+		req.Color = domain.DefaultColor
 	}
 
-	exists, err := habitNameExistsInSet(c, req.SetID, req.Name, nil)
+	exists, err := a.SQLite.Habits().NameExistsInSet(req.SetID, req.Name, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "check failed"})
 		return
@@ -242,7 +223,7 @@ func handleHabitCreate(c *gin.Context) {
 
 // handleHabitList mirrors `handleGetHabits`.  Optional `?set_id=N` query
 // narrows the list to a single habit set.
-func handleHabitList(c *gin.Context) {
+func HabitList(c *gin.Context) {
 	a := appFromCtx(c)
 	limit, offset, ok := parsePagination(c)
 	if !ok {
@@ -272,7 +253,7 @@ func handleHabitList(c *gin.Context) {
 }
 
 // handleHabitUpdate mirrors `handleUpdateHabit`.
-func handleHabitUpdate(c *gin.Context) {
+func HabitUpdate(c *gin.Context) {
 	a := appFromCtx(c)
 	id, err := pathID(c, "/api/habits/")
 	if err != nil {
@@ -295,10 +276,10 @@ func handleHabitUpdate(c *gin.Context) {
 		return
 	}
 	if req.GoalSeconds == 0 {
-		req.GoalSeconds = 1500
+		req.GoalSeconds = domain.DefaultGoalSeconds
 	}
 	if req.Color == "" {
-		req.Color = "#6366f1"
+		req.Color = domain.DefaultColor
 	}
 
 	row, err := a.SQLite.Habits().GetByID(id)
@@ -307,7 +288,7 @@ func handleHabitUpdate(c *gin.Context) {
 		return
 	}
 
-	exists, err := habitNameExistsInSet(c, row.SetID, req.Name, &id)
+	exists, err := a.SQLite.Habits().NameExistsInSet(row.SetID, req.Name, &id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "check failed"})
 		return
@@ -331,7 +312,7 @@ func handleHabitUpdate(c *gin.Context) {
 }
 
 // handleHabitDelete mirrors `handleDeleteHabit`.
-func handleHabitDelete(c *gin.Context) {
+func HabitDelete(c *gin.Context) {
 	a := appFromCtx(c)
 	id, err := pathID(c, "/api/habits/")
 	if err != nil {
@@ -347,7 +328,7 @@ func handleHabitDelete(c *gin.Context) {
 
 // handleHabitDetail mirrors `handleGetHabitDetail` — single habit with
 // today's accumulated seconds + progress percent.
-func handleHabitDetail(c *gin.Context) {
+func HabitDetail(c *gin.Context) {
 	a := appFromCtx(c)
 	id, err := pathIDWithSuffix(c, "/api/habits/", "/detail")
 	if err != nil {
@@ -357,7 +338,7 @@ func handleHabitDetail(c *gin.Context) {
 
 	date := c.Query("date")
 	if date == "" {
-		date = todayString()
+		date = domain.TodayString(a.Settings.Config().Basic.Timezone)
 	}
 
 	row, err := a.SQLite.Habits().GetByID(id)
@@ -375,11 +356,11 @@ func handleHabitDetail(c *gin.Context) {
 		progressPercent = (todaySeconds * 100) / row.GoalSeconds
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"id":              row.ID,
-		"name":            row.Name,
-		"goal_seconds":    row.GoalSeconds,
-		"color":           row.Color,
-		"today_seconds":   todaySeconds,
+		"id":               row.ID,
+		"name":             row.Name,
+		"goal_seconds":     row.GoalSeconds,
+		"color":            row.Color,
+		"today_seconds":    todaySeconds,
 		"progress_percent": progressPercent,
 	})
 }
@@ -390,7 +371,7 @@ func handleHabitDetail(c *gin.Context) {
 
 // handleSessionCreate mirrors `handleCreateSession`.
 // Body: {habit_id, duration_seconds, count?}.
-func handleSessionCreate(c *gin.Context) {
+func SessionCreate(c *gin.Context) {
 	a := appFromCtx(c)
 
 	var req struct {
@@ -406,16 +387,16 @@ func handleSessionCreate(c *gin.Context) {
 		req.Count = 1
 	}
 
-	id, err := a.SQLite.Timers().CreateSession(req.HabitID, req.DurationSeconds, req.Count, todayString())
+	id, err := a.SQLite.Timers().CreateSession(req.HabitID, req.DurationSeconds, req.Count, domain.TodayString(a.Settings.Config().Basic.Timezone))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to create session"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"id":              id,
-		"habit_id":        req.HabitID,
+		"id":               id,
+		"habit_id":         req.HabitID,
 		"duration_seconds": req.DurationSeconds,
-		"date":            todayString(),
+		"date":             domain.TodayString(a.Settings.Config().Basic.Timezone),
 	})
 }
 
@@ -461,7 +442,7 @@ func HabitStats(c *gin.Context) {
 // handleSessionList mirrors `handleGetSessions`.  Supports three query
 // shapes (matching the Zig source): `?date=YYYY-MM-DD`,
 // `?start_date=…&end_date=…`, or no date → today.
-func handleSessionList(c *gin.Context) {
+func SessionList(c *gin.Context) {
 	a := appFromCtx(c)
 	limit, offset, ok := parsePagination(c)
 	if !ok {
@@ -482,7 +463,7 @@ func handleSessionList(c *gin.Context) {
 	case date != "":
 		rows, err = a.SQLite.Timers().ListSessionsByDate(date, limit, offset)
 	default:
-		rows, err = a.SQLite.Timers().ListSessionsByDate(todayString(), limit, offset)
+		rows, err = a.SQLite.Timers().ListSessionsByDate(domain.TodayString(a.Settings.Config().Basic.Timezone), limit, offset)
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to get sessions"})
@@ -496,7 +477,7 @@ func handleSessionList(c *gin.Context) {
 // -----------------------------------------------------------------------------
 // Zig source uses the same body shape as `POST /api/start` minus the
 // paused/finished fields).
-func handleTimerSessionCreate(c *gin.Context) {
+func TimerSessionCreate(c *gin.Context) {
 	a := appFromCtx(c)
 
 	var req struct {
@@ -528,7 +509,7 @@ func handleTimerSessionCreate(c *gin.Context) {
 // handleTimerSessionList mirrors the implicit `getTimerSessionById` /
 // list-all pattern.  Without a query, returns the active (unfinished)
 // session, mirroring the Zig behavior of returning one row.
-func handleTimerSessionList(c *gin.Context) {
+func TimerSessionList(c *gin.Context) {
 	a := appFromCtx(c)
 	if idStr := c.Query("id"); idStr != "" {
 		id, err := strconv.ParseInt(idStr, 10, 64)
@@ -553,7 +534,7 @@ func handleTimerSessionList(c *gin.Context) {
 }
 
 // handleTimerSessionUpdate mirrors `updateTimerSession`.
-func handleTimerSessionUpdate(c *gin.Context) {
+func TimerSessionUpdate(c *gin.Context) {
 	a := appFromCtx(c)
 	id, err := pathID(c, "/api/timer-sessions/")
 	if err != nil {
@@ -590,7 +571,7 @@ func handleTimerSessionUpdate(c *gin.Context) {
 }
 
 // handleTimerSessionDelete mirrors `deleteTimerSession`.
-func handleTimerSessionDelete(c *gin.Context) {
+func TimerSessionDelete(c *gin.Context) {
 	a := appFromCtx(c)
 	id, err := pathID(c, "/api/timer-sessions/")
 	if err != nil {

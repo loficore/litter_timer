@@ -25,7 +25,6 @@
     "chart.js": "^4.5.1",
     "daisyui": "^5.5.19",
     "preact": "^10.28.2",
-    "preact-router": "^4.1.2",
     "toml": "^4.1.1"
   },
   "devDependencies": {

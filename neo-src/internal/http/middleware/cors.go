@@ -33,7 +33,11 @@ func CORS(allowOrigin string) gin.HandlerFunc {
 		header.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, Origin, X-Requested-With")
 		header.Set("Access-Control-Expose-Headers", "Content-Length, Content-Type")
 		header.Set("Access-Control-Max-Age", "86400")
-		header.Set("Access-Control-Allow-Credentials", "true")
+
+		// CORS spec forbids Allow-Credentials with wildcard origin.
+		if allowOrigin != "*" {
+			header.Set("Access-Control-Allow-Credentials", "true")
+		}
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)

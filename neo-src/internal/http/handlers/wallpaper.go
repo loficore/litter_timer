@@ -3,10 +3,10 @@
 // File `wallpaper.go` ports the wallpaper handlers from std_server.zig.
 // Routes:
 //
-//   POST   /api/wallpapers        → handleWallpaperUpload
-//   GET    /api/wallpapers        → handleWallpaperList
-//   GET    /api/wallpapers/:id    → handleWallpaperServe
-//   DELETE /api/wallpapers/:id    → handleWallpaperDelete
+//	POST   /api/wallpapers        → handleWallpaperUpload
+//	GET    /api/wallpapers        → handleWallpaperList
+//	GET    /api/wallpapers/:id    → handleWallpaperServe
+//	DELETE /api/wallpapers/:id    → handleWallpaperDelete
 //
 // Wallpapers are stored as plain files under
 // `<db_dir>/wallpapers/<timestamp>_<safe_name>`.  The DB is consulted
@@ -62,7 +62,7 @@ func sanitizeFilename(name string) string {
 
 // handleWallpaperUpload mirrors `handleUploadWallpaper`.  Accepts a
 // `multipart/form-data` request with a single "file" field.
-func handleWallpaperUpload(c *gin.Context) {
+func WallpaperUpload(c *gin.Context) {
 	a := appFromCtx(c)
 
 	dir, err := wallpapersDir(a.DBPath)
@@ -116,7 +116,7 @@ func saveMultipart(src multipart.File, dst string) error {
 
 // handleWallpaperList mirrors `handleListWallpapers`.  Returns a JSON
 // array of {name} objects (filename only — no path exposure).
-func handleWallpaperList(c *gin.Context) {
+func WallpaperList(c *gin.Context) {
 	a := appFromCtx(c)
 	dir, err := wallpapersDir(a.DBPath)
 	if err != nil {
@@ -140,7 +140,7 @@ func handleWallpaperList(c *gin.Context) {
 
 // handleWallpaperServe mirrors `handleServeWallpaper`.  Sets the
 // Content-Type based on the file extension.
-func handleWallpaperServe(c *gin.Context) {
+func WallpaperServe(c *gin.Context) {
 	a := appFromCtx(c)
 	filename := c.Param("id")
 	if filename == "" || strings.Contains(filename, "/") {
@@ -168,7 +168,7 @@ func handleWallpaperServe(c *gin.Context) {
 }
 
 // handleWallpaperDelete mirrors `handleDeleteWallpaper`.
-func handleWallpaperDelete(c *gin.Context) {
+func WallpaperDelete(c *gin.Context) {
 	a := appFromCtx(c)
 	filename := c.Param("id")
 	if filename == "" || strings.Contains(filename, "/") {
@@ -261,7 +261,7 @@ func stemFromURL(rawURL string) string {
 	return sanitizeFilename(base)
 }
 
-func handleWallpaperFromURL(c *gin.Context) {
+func WallpaperFromURL(c *gin.Context) {
 	a := appFromCtx(c)
 
 	dir, err := wallpapersDir(a.DBPath)

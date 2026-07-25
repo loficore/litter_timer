@@ -21,7 +21,6 @@ import type {
   HabitSet,
   Habit,
   HabitDetail,
-  HabitStreak,
   Session,
   CreateSessionResult,
   BackupConfig,
@@ -280,17 +279,7 @@ export class WailsAPIClient {
   }
 
   /**
-   * 获取习惯连续完成天数
-   * @param habitId - 习惯 ID
-   * @param goalSeconds - 可选目标秒数
-   */
-  async getHabitStreak(habitId: number, goalSeconds?: number): Promise<HabitStreak> {
-    const HS = await this._b('HabitService');
-    return HS.GetHabitStreak(habitId, goalSeconds ?? 0);
-  }
-
-  /**
-   * 获取习惯详情（含今日进度和连续天数）
+   * 获取习惯详情（含今日进度）
    * @param habitId - 习惯 ID
    * @param date - 可选日期
    */

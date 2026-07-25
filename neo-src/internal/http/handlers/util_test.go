@@ -18,7 +18,7 @@ func TestHandleFrontendLog_ValidEntry(t *testing.T) {
 	body := strings.NewReader(`{"category":"test","level":"info","message":"test message","runtime":"browser"}`)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/log", body)
 
-	handleFrontendLog(c)
+	FrontendLog(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -36,7 +36,7 @@ func TestHandleFrontendLog_EmptyBody(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/log", strings.NewReader(""))
 
-	handleFrontendLog(c)
+	FrontendLog(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d", w.Code)
@@ -57,7 +57,7 @@ func TestHandleFrontendLog_InvalidJSON(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/log", strings.NewReader("not json"))
 
-	handleFrontendLog(c)
+	FrontendLog(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d", w.Code)
@@ -79,7 +79,7 @@ func TestHandleFrontendLog_MissingLevel(t *testing.T) {
 	body := strings.NewReader(`{"category":"test","message":"test message","runtime":"browser"}`)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/log", body)
 
-	handleFrontendLog(c)
+	FrontendLog(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d", w.Code)
@@ -98,7 +98,7 @@ func TestHandleFrontendLog_ErrorLevel(t *testing.T) {
 	body := strings.NewReader(`{"category":"test","level":"error","message":"error message","runtime":"browser"}`)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/log", body)
 
-	handleFrontendLog(c)
+	FrontendLog(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d", w.Code)
@@ -294,7 +294,7 @@ func TestPathIDWithSuffix_InvalidID(t *testing.T) {
 func TestNowUnix(t *testing.T) {
 	expected := time.Now().Unix()
 	got := nowUnix()
-	
+
 	diff := got - expected
 	if diff < -1 || diff > 1 {
 		t.Errorf("nowUnix = %d, want approximately %d", got, expected)
@@ -337,7 +337,7 @@ func TestMaskFunction_LongString(t *testing.T) {
 
 func TestMasterPasswordErrorFunction(t *testing.T) {
 	result := masterPasswordError("test_code", "test message", "setup")
-	
+
 	if result["success"] != false {
 		t.Errorf("success = %v, want false", result["success"])
 	}
@@ -347,7 +347,7 @@ func TestMasterPasswordErrorFunction(t *testing.T) {
 	if result["message"] != "test message" {
 		t.Errorf("message = %v, want 'test message'", result["message"])
 	}
-	
+
 	action, ok := result["action"].(gin.H)
 	if !ok {
 		t.Fatal("action should be a gin.H")
@@ -366,7 +366,7 @@ func TestMasterPasswordErrorFunction(t *testing.T) {
 
 func TestMasterPasswordErrorFunction_EmptyMode(t *testing.T) {
 	result := masterPasswordError("test_code", "test message", "")
-	
+
 	action, ok := result["action"].(gin.H)
 	if !ok {
 		t.Fatal("action should be a gin.H")

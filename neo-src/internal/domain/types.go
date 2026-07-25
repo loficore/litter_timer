@@ -6,14 +6,25 @@
 //
 //   - Zig `enum`           → Go `type X int` with `iota` constants.
 //   - Zig `union(enum)`    → Go sealed interface (marker method) with concrete
-//                            struct variants.
+//     struct variants.
 //   - Zig `struct { x = d }` → Go struct with field tags + a `New…` constructor
-//                            that applies the Zig defaults.
+//     that applies the Zig defaults.
 //   - Zig `[]const u8`     → Go `string` (immutable, no allocator needed).
 //   - Zig `u64`/`i64`/`u32`→ Go `uint64`/`int64`/`uint32` (matched bit widths).
 package domain
 
 import "time"
+
+var now = time.Now
+
+// TodayString returns today's date in the user's timezone offset from UTC.
+func TodayString(offsetHours int8) string {
+	return formatDateAtOffset(now(), offsetHours)
+}
+
+func formatDateAtOffset(base time.Time, offsetHours int8) string {
+	return base.UTC().Add(time.Duration(offsetHours) * time.Hour).Format("2006-01-02")
+}
 
 // -----------------------------------------------------------------------------
 // Time-unit constants (seconds).
@@ -32,16 +43,19 @@ const (
 // -----------------------------------------------------------------------------
 
 const (
-	DefaultWorkDurationSeconds    = 25 * Minute       // 1500 s (pomodoro work)
-	DefaultRestDurationSeconds    = 5 * Minute        // 300 s
-	DefaultMaxStopwatchSeconds    = 24 * Hour         // 86400 s
-	DefaultMaxDurationSeconds     = Day               // 86400 s
-	DefaultMaxYearSeconds         = 365 * Year        // ~1 year
-	DefaultTickIntervalMs         = 1000
-	DefaultAutoSaveIntervalMs     = 5000
-	MinTickIntervalMs             = 100
-	MaxTickIntervalMs             = 5000
-	DefaultMaxLogFileSize  uint64 = 10 * 1024 * 1024
+	DefaultWorkDurationSeconds        = 25 * Minute // 1500 s (pomodoro work)
+	DefaultRestDurationSeconds        = 5 * Minute  // 300 s
+	DefaultMaxStopwatchSeconds        = 24 * Hour   // 86400 s
+	DefaultMaxDurationSeconds         = Day         // 86400 s
+	DefaultMaxYearSeconds             = 365 * Year  // ~1 year
+	DefaultTickIntervalMs             = 1000
+	DefaultAutoSaveIntervalMs         = 5000
+	MinTickIntervalMs                 = 100
+	MaxTickIntervalMs                 = 5000
+	DefaultMaxLogFileSize      uint64 = 10 * 1024 * 1024
+
+	DefaultColor       = "#6366f1"
+	DefaultGoalSeconds = 1500
 )
 
 // -----------------------------------------------------------------------------
@@ -89,6 +103,14 @@ func (d DefaultMode) String() string {
 	default:
 		return "unknown"
 	}
+}
+
+// ParseDefaultMode converts a string to DefaultMode, defaulting to countdown.
+func ParseDefaultMode(s string) DefaultMode {
+	if s == "stopwatch" {
+		return DefaultModeStopwatch
+	}
+	return DefaultModeCountdown
 }
 
 // -----------------------------------------------------------------------------
@@ -215,11 +237,11 @@ type TimerPreset struct {
 
 // SettingsBasic captures the basic user preferences.
 type SettingsBasic struct {
-	Timezone    int8    `json:"timezone"`     // hours east of UTC, default 8 (CN)
-	Language    string  `json:"language"`     // e.g. "ZH"
+	Timezone    int8        `json:"timezone"` // hours east of UTC, default 8 (CN)
+	Language    string      `json:"language"` // e.g. "ZH"
 	DefaultMode DefaultMode `json:"default_mode"`
-	ThemeMode   string  `json:"theme_mode"`   // "dark" | "light" | ...
-	Wallpaper   string  `json:"wallpaper"`    // global wallpaper path/URL
+	ThemeMode   string      `json:"theme_mode"` // "dark" | "light" | ...
+	Wallpaper   string      `json:"wallpaper"`  // global wallpaper path/URL
 }
 
 func NewDefaultSettingsBasic() SettingsBasic {
@@ -270,10 +292,10 @@ func NewDefaultSettingsAuth() SettingsAuth {
 
 // SettingsConfig is the top-level persisted application configuration.
 type SettingsConfig struct {
-	Basic         SettingsBasic    `json:"basic"`
-	ClockDefaults ClockTaskConfig  `json:"clock_defaults"`
-	Logging       SettingsLogging  `json:"logging"`
-	Auth          SettingsAuth     `json:"auth"`
+	Basic         SettingsBasic   `json:"basic"`
+	ClockDefaults ClockTaskConfig `json:"clock_defaults"`
+	Logging       SettingsLogging `json:"logging"`
+	Auth          SettingsAuth    `json:"auth"`
 }
 
 // NewDefaultSettingsConfig returns a fully-populated SettingsConfig that
@@ -324,7 +346,7 @@ type EventType interface {
 	isEventType()
 }
 
-func (ClockEventWrapper) isEventType()   {}
+func (ClockEventWrapper) isEventType()    {}
 func (SettingsEventWrapper) isEventType() {}
 
 // ClockEventWrapper carries a ClockEvent through the bus.
@@ -394,18 +416,18 @@ type ApiShowModal struct {
 // are present (even when unused by the active target) so a single struct
 // round-trips through JSON without dropping user input.
 type BackupConfig struct {
-	Enabled        bool            `json:"enabled"`
-	AutoBackup     bool            `json:"auto_backup"`
-	AutoBackupSecs uint64          `json:"auto_backup_interval"` // seconds
+	Enabled        bool             `json:"enabled"`
+	AutoBackup     bool             `json:"auto_backup"`
+	AutoBackupSecs uint64           `json:"auto_backup_interval"` // seconds
 	TargetType     BackupTargetType `json:"target_type"`
 
 	// Local-only.
 	LocalPath string `json:"local_path"`
 
 	// WebDAV-only.
-	WebDAVURL      string `json:"webdav_url"`
-	WebDAVUsername string `json:"webdav_username"`
-	WebDAVPassword string `json:"webdav_password"` // encrypted at rest
+	WebDAVURL        string `json:"webdav_url"`
+	WebDAVUsername   string `json:"webdav_username"`
+	WebDAVPassword   string `json:"webdav_password"` // encrypted at rest
 	WebDAVPathPrefix string `json:"webdav_path_prefix"`
 
 	// S3-only.
@@ -417,31 +439,31 @@ type BackupConfig struct {
 	S3PathPrefix string `json:"s3_path_prefix"`
 
 	// Credentials.
-	HasMasterPassword         bool  `json:"has_master_password"`
-	CredentialsUnlockTime     int64 `json:"credentials_unlock_time"`
-	CredentialUnlockAttempts  uint32 `json:"credential_unlock_attempts"`
-	CredentialLockedUntil     int64 `json:"credential_locked_until"`
+	HasMasterPassword        bool   `json:"has_master_password"`
+	CredentialsUnlockTime    int64  `json:"credentials_unlock_time"`
+	CredentialUnlockAttempts uint32 `json:"credential_unlock_attempts"`
+	CredentialLockedUntil    int64  `json:"credential_locked_until"`
 }
 
 // NewDefaultBackupConfig returns the Zig defaults: disabled, local target,
 // empty paths.
 func NewDefaultBackupConfig() BackupConfig {
 	return BackupConfig{
-		Enabled:        false,
-		AutoBackup:     false,
-		AutoBackupSecs: Day,
-		TargetType:     BackupTargetLocal,
-		LocalPath:      "",
-		WebDAVURL:      "",
-		WebDAVUsername: "",
-		WebDAVPassword: "",
-		WebDAVPathPrefix: "little_timer/",
-		S3Endpoint:     "",
-		S3Bucket:       "",
-		S3Region:       "",
-		S3AccessKey:    "",
-		S3SecretKey:    "",
-		S3PathPrefix:   "little_timer/",
+		Enabled:                  false,
+		AutoBackup:               false,
+		AutoBackupSecs:           Day,
+		TargetType:               BackupTargetLocal,
+		LocalPath:                "",
+		WebDAVURL:                "",
+		WebDAVUsername:           "",
+		WebDAVPassword:           "",
+		WebDAVPathPrefix:         "little_timer/",
+		S3Endpoint:               "",
+		S3Bucket:                 "",
+		S3Region:                 "",
+		S3AccessKey:              "",
+		S3SecretKey:              "",
+		S3PathPrefix:             "little_timer/",
 		HasMasterPassword:        false,
 		CredentialsUnlockTime:    0,
 		CredentialUnlockAttempts: 0,
@@ -454,6 +476,14 @@ type BackupInfo struct {
 	Name      string `json:"name"`
 	Timestamp int64  `json:"timestamp"`
 	SizeBytes uint64 `json:"size_bytes"`
+}
+
+// BoolToInt mirrors Zig's `@intFromBool`.  SQLite BOOLEAN stores 0/1.
+func BoolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // -----------------------------------------------------------------------------

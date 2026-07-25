@@ -114,12 +114,12 @@ func (c *CrudManager) SaveSettings(config domain.SettingsConfig) error {
 		themeMode,
 		config.Basic.Wallpaper,
 		int64(config.ClockDefaults.Countdown.DurationSeconds),
-		boolToInt(config.ClockDefaults.Countdown.Loop),
+		domain.BoolToInt(config.ClockDefaults.Countdown.Loop),
 		int64(config.ClockDefaults.Countdown.LoopCount),
 		int64(config.ClockDefaults.Countdown.LoopIntervalSeconds),
 		int64(config.ClockDefaults.Stopwatch.MaxSeconds),
 		logLevel,
-		boolToInt(config.Logging.EnableTimestamp),
+		domain.BoolToInt(config.Logging.EnableTimestamp),
 		config.Logging.TickIntervalMs,
 	)
 	if err != nil {
@@ -175,7 +175,7 @@ func (c *CrudManager) LoadSettings() (domain.SettingsConfig, error) {
 		Basic: domain.SettingsBasic{
 			Timezone:    int8(timezone),
 			Language:    language,
-			DefaultMode: parseDefaultMode(defaultModeStr),
+			DefaultMode: domain.ParseDefaultMode(defaultModeStr),
 			ThemeMode:   themeMode,
 			Wallpaper:   wallpaper,
 		},
@@ -219,24 +219,4 @@ func (c *CrudManager) LoadSettingsRow() (SettingsRow, error) {
 		return SettingsRow{}, fmt.Errorf("%w: %w", ErrQueryFailed, err)
 	}
 	return row, nil
-}
-
-// boolToInt mirrors Zig's `@intFromBool`.  SQLite BOOLEAN stores 0/1.
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
-// parseDefaultMode converts the persisted TEXT back to the DefaultMode enum.
-// Mirrors the Zig if/else that checked for "countdown" and assumed
-// "stopwatch" otherwise.
-func parseDefaultMode(s string) domain.DefaultMode {
-	if s == "countdown" {
-		return domain.DefaultModeCountdown
-	}
-	// Zig treats everything-not-"countdown" as stopwatch; preserve that.
-	// The schema's CHECK also allows "world_clock" but no consumer uses it.
-	return domain.DefaultModeStopwatch
 }

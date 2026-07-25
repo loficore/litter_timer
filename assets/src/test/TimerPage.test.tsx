@@ -81,7 +81,6 @@ vi.mock("../utils/i18n", () => ({
       "timer.today_progress": "Today",
       "timer.goal": "Goal",
       "timer.progress": "Progress",
-      "timer.streak": "streak",
       "habit.no_habits": "No habits yet",
     };
     let result = translations[key] || key;

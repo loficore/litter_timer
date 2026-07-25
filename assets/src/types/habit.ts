@@ -82,8 +82,6 @@ export interface HabitDetail {
   color: string;
   /** 今日累计时长（秒） */
   today_seconds: number;
-  /** 连续完成天数 */
-  streak: number;
   /** 当前进度百分比 */
   progress_percent: number;
 }
@@ -131,10 +129,6 @@ export interface StatsSummary {
   total_seconds: number;
   /** 累计总会话数 */
   total_sessions: number;
-  /** 当前连续完成天数 */
-  current_streak: number;
-  /** 最长连续完成天数 */
-  longest_streak: number;
   /** 日均时长（秒） */
   average_per_day: number;
   /** 目标完成率 */

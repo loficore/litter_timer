@@ -29,7 +29,7 @@ import (
 //
 // Connection limits (1h max session, 30s max heartbeat gap) match the
 // Zig source's `max_session_seconds` / `max_heartbeat_gap_seconds`.
-func handleEvents(c *gin.Context) {
+func Events(c *gin.Context) {
 	a := appFromCtx(c)
 
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
@@ -109,7 +109,7 @@ func writeSSE(w http.ResponseWriter, event string, payload any) {
 // handleFrontendLog mirrors `handleFrontendLog` — receives a JSON
 // log entry from the browser and re-emits it via the server logger.
 // The handler is exposed at `POST /api/log` (public, no auth).
-func handleFrontendLog(c *gin.Context) {
+func FrontendLog(c *gin.Context) {
 	var entry struct {
 		Category string `json:"category"`
 		Level    string `json:"level"`

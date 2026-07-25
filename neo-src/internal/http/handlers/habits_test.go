@@ -25,7 +25,7 @@ func TestHandleHabitSetCreate(t *testing.T) {
 		strings.NewReader(`{"name":"Work","description":"work habits","color":"#ff0000"}`))
 	c.Set("app", a)
 
-	handleHabitSetCreate(c)
+	HabitSetCreate(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -54,7 +54,7 @@ func TestHandleHabitSetCreate_MissingName(t *testing.T) {
 		strings.NewReader(`{"color":"#ff0000"}`))
 	c.Set("app", a)
 
-	handleHabitSetCreate(c)
+	HabitSetCreate(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -70,7 +70,7 @@ func TestHandleHabitSetCreate_DefaultColor(t *testing.T) {
 		strings.NewReader(`{"name":"NoColor"}`))
 	c.Set("app", a)
 
-	handleHabitSetCreate(c)
+	HabitSetCreate(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -93,7 +93,7 @@ func TestHandleHabitSetList(t *testing.T) {
 		c.Request = httptest.NewRequest(http.MethodPost, "/api/habit-sets",
 			strings.NewReader(`{"name":"`+name+`"}`))
 		c.Set("app", a)
-		handleHabitSetCreate(c)
+		HabitSetCreate(c)
 	}
 
 	gin.SetMode(gin.TestMode)
@@ -102,7 +102,7 @@ func TestHandleHabitSetList(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/habit-sets", nil)
 	c.Set("app", a)
 
-	handleHabitSetList(c)
+	HabitSetList(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -133,7 +133,7 @@ func TestHandleHabitSetUpdate(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/habit-sets",
 		strings.NewReader(`{"name":"Old","color":"#000000"}`))
 	c.Set("app", a)
-	handleHabitSetCreate(c)
+	HabitSetCreate(c)
 	var created map[string]any
 	_ = json.Unmarshal(w.Body.Bytes(), &created)
 	id := int64(created["id"].(float64))
@@ -145,7 +145,7 @@ func TestHandleHabitSetUpdate(t *testing.T) {
 	c2.Params = gin.Params{{Key: "id", Value: itoa(id)}}
 	c2.Set("app", a)
 
-	handleHabitSetUpdate(c2)
+	HabitSetUpdate(c2)
 
 	if w2.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w2.Code, w2.Body.String())
@@ -170,7 +170,7 @@ func TestHandleHabitSetUpdate_InvalidID(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "abc"}}
 	c.Set("app", a)
 
-	handleHabitSetUpdate(c)
+	HabitSetUpdate(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -187,7 +187,7 @@ func TestHandleHabitSetUpdate_MissingName(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 	c.Set("app", a)
 
-	handleHabitSetUpdate(c)
+	HabitSetUpdate(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -204,7 +204,7 @@ func TestHandleHabitSetDelete(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/habit-sets",
 		strings.NewReader(`{"name":"ToDelete"}`))
 	c.Set("app", a)
-	handleHabitSetCreate(c)
+	HabitSetCreate(c)
 	var created map[string]any
 	_ = json.Unmarshal(w.Body.Bytes(), &created)
 	id := int64(created["id"].(float64))
@@ -215,7 +215,7 @@ func TestHandleHabitSetDelete(t *testing.T) {
 	c2.Params = gin.Params{{Key: "id", Value: itoa(id)}}
 	c2.Set("app", a)
 
-	handleHabitSetDelete(c2)
+	HabitSetDelete(c2)
 
 	if w2.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w2.Code, w2.Body.String())
@@ -236,7 +236,7 @@ func TestHandleHabitSetDelete_InvalidID(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "abc"}}
 	c.Set("app", a)
 
-	handleHabitSetDelete(c)
+	HabitSetDelete(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -255,7 +255,7 @@ func newHabitSetID(t *testing.T, a *app.App, name string) int64 {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/habit-sets",
 		strings.NewReader(`{"name":"`+name+`"}`))
 	c.Set("app", a)
-	handleHabitSetCreate(c)
+	HabitSetCreate(c)
 	if w.Code != http.StatusOK {
 		t.Fatalf("seed habit-set %q: code = %d, body = %s", name, w.Code, w.Body.String())
 	}
@@ -275,7 +275,7 @@ func TestHandleHabitCreate(t *testing.T) {
 		strings.NewReader(`{"set_id":`+itoa(setID)+`,"name":"Reading","goal_seconds":600,"color":"#00ff00"}`))
 	c.Set("app", a)
 
-	handleHabitCreate(c)
+	HabitCreate(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -301,7 +301,7 @@ func TestHandleHabitCreate_MissingName(t *testing.T) {
 		strings.NewReader(`{"set_id":1}`))
 	c.Set("app", a)
 
-	handleHabitCreate(c)
+	HabitCreate(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -319,7 +319,7 @@ func TestHandleHabitCreate_DefaultGoal(t *testing.T) {
 		strings.NewReader(`{"set_id":`+itoa(setID)+`,"name":"DefaultGoal"}`))
 	c.Set("app", a)
 
-	handleHabitCreate(c)
+	HabitCreate(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -341,7 +341,7 @@ func TestHandleHabitList(t *testing.T) {
 		c.Request = httptest.NewRequest(http.MethodPost, "/api/habits",
 			strings.NewReader(`{"set_id":`+itoa(setID)+`,"name":"`+name+`"}`))
 		c.Set("app", a)
-		handleHabitCreate(c)
+		HabitCreate(c)
 	}
 
 	gin.SetMode(gin.TestMode)
@@ -350,7 +350,7 @@ func TestHandleHabitList(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/habits", nil)
 	c.Set("app", a)
 
-	handleHabitList(c)
+	HabitList(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -388,7 +388,7 @@ func TestHandleHabitList_FilterBySet(t *testing.T) {
 		c.Request = httptest.NewRequest(http.MethodPost, "/api/habits",
 			strings.NewReader(`{"set_id":`+itoa(p.setID)+`,"name":"`+p.name+`"}`))
 		c.Set("app", a)
-		handleHabitCreate(c)
+		HabitCreate(c)
 	}
 
 	gin.SetMode(gin.TestMode)
@@ -397,7 +397,7 @@ func TestHandleHabitList_FilterBySet(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/habits?set_id="+itoa(setA), nil)
 	c.Set("app", a)
 
-	handleHabitList(c)
+	HabitList(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -417,7 +417,7 @@ func TestHandleHabitList_InvalidSetID(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/habits?set_id=notanumber", nil)
 	c.Set("app", a)
 
-	handleHabitList(c)
+	HabitList(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -432,7 +432,7 @@ func newHabitID(t *testing.T, a *app.App, setID int64, name string) int64 {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/habits",
 		strings.NewReader(`{"set_id":`+itoa(setID)+`,"name":"`+name+`"}`))
 	c.Set("app", a)
-	handleHabitCreate(c)
+	HabitCreate(c)
 	if w.Code != http.StatusOK {
 		t.Fatalf("seed habit %q: code = %d, body = %s", name, w.Code, w.Body.String())
 	}
@@ -454,7 +454,7 @@ func TestHandleHabitUpdate(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: itoa(habitID)}}
 	c.Set("app", a)
 
-	handleHabitUpdate(c)
+	HabitUpdate(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -479,7 +479,7 @@ func TestHandleHabitUpdate_InvalidID(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "abc"}}
 	c.Set("app", a)
 
-	handleHabitUpdate(c)
+	HabitUpdate(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -496,7 +496,7 @@ func TestHandleHabitUpdate_MissingName(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 	c.Set("app", a)
 
-	handleHabitUpdate(c)
+	HabitUpdate(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -516,7 +516,7 @@ func TestHandleHabitCreate_DuplicateName(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/habits",
 		strings.NewReader(`{"set_id":`+itoa(setID)+`,"name":"Read","goal_seconds":600}`))
 	c.Set("app", a)
-	handleHabitCreate(c)
+	HabitCreate(c)
 	if w.Code != http.StatusOK {
 		t.Fatalf("first create: %d", w.Code)
 	}
@@ -526,7 +526,7 @@ func TestHandleHabitCreate_DuplicateName(t *testing.T) {
 	c2.Request = httptest.NewRequest(http.MethodPost, "/api/habits",
 		strings.NewReader(`{"set_id":`+itoa(setID)+`,"name":"Read","goal_seconds":600}`))
 	c2.Set("app", a)
-	handleHabitCreate(c2)
+	HabitCreate(c2)
 	if w2.Code != http.StatusBadRequest {
 		t.Errorf("duplicate: got %d, want 400", w2.Code)
 	}
@@ -542,7 +542,7 @@ func TestHandleHabitCreate_DuplicateNameCrossSet(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/habits",
 		strings.NewReader(`{"set_id":`+itoa(setID1)+`,"name":"Read","goal_seconds":600}`))
 	c.Set("app", a)
-	handleHabitCreate(c)
+	HabitCreate(c)
 	if w.Code != http.StatusOK {
 		t.Fatalf("first create: %d", w.Code)
 	}
@@ -552,7 +552,7 @@ func TestHandleHabitCreate_DuplicateNameCrossSet(t *testing.T) {
 	c2.Request = httptest.NewRequest(http.MethodPost, "/api/habits",
 		strings.NewReader(`{"set_id":`+itoa(setID2)+`,"name":"Read","goal_seconds":600}`))
 	c2.Set("app", a)
-	handleHabitCreate(c2)
+	HabitCreate(c2)
 	if w2.Code != http.StatusOK {
 		t.Errorf("cross-set duplicate: got %d, want 200", w2.Code)
 	}
@@ -571,7 +571,7 @@ func TestHandleHabitUpdate_DuplicateName(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPut, "/api/habits/"+itoa(habit1ID),
 		strings.NewReader(`{"name":"Movie","goal_seconds":600}`))
 	c.Set("app", a)
-	handleHabitUpdate(c)
+	HabitUpdate(c)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("update to duplicate: got %d, want 400", w.Code)
 	}
@@ -589,7 +589,7 @@ func TestHandleHabitDelete(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: itoa(habitID)}}
 	c.Set("app", a)
 
-	handleHabitDelete(c)
+	HabitDelete(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -610,7 +610,7 @@ func TestHandleHabitDelete_InvalidID(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "abc"}}
 	c.Set("app", a)
 
-	handleHabitDelete(c)
+	HabitDelete(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -628,7 +628,7 @@ func TestHandleHabitDetail(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/habits/"+itoa(habitID)+"/detail", nil)
 	c.Set("app", a)
 
-	handleHabitDetail(c)
+	HabitDetail(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -656,7 +656,7 @@ func TestHandleHabitDetail_InvalidID(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/habits/abc/detail", nil)
 	c.Set("app", a)
 
-	handleHabitDetail(c)
+	HabitDetail(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -671,7 +671,7 @@ func TestHandleHabitDetail_NotFound(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/habits/999999/detail", nil)
 	c.Set("app", a)
 
-	handleHabitDetail(c)
+	HabitDetail(c)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("code = %d, want 404", w.Code)
@@ -694,7 +694,7 @@ func TestHandleSessionCreate(t *testing.T) {
 		strings.NewReader(`{"habit_id":`+itoa(habitID)+`,"duration_seconds":1200,"count":2}`))
 	c.Set("app", a)
 
-	handleSessionCreate(c)
+	SessionCreate(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -723,7 +723,7 @@ func TestHandleSessionCreate_DefaultCount(t *testing.T) {
 		strings.NewReader(`{"habit_id":`+itoa(habitID)+`,"duration_seconds":600}`))
 	c.Set("app", a)
 
-	handleSessionCreate(c)
+	SessionCreate(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -743,14 +743,14 @@ func TestHandleSessionList_Today(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/sessions",
 		strings.NewReader(`{"habit_id":`+itoa(habitID)+`,"duration_seconds":300,"count":1}`))
 	c.Set("app", a)
-	handleSessionCreate(c)
+	SessionCreate(c)
 
 	// List with no filter → today.
 	w2 := httptest.NewRecorder()
 	c2, _ := gin.CreateTestContext(w2)
 	c2.Request = httptest.NewRequest(http.MethodGet, "/api/sessions", nil)
 	c2.Set("app", a)
-	handleSessionList(c2)
+	SessionList(c2)
 
 	if w2.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w2.Code, w2.Body.String())
@@ -778,7 +778,7 @@ func TestHandleSessionList_ByDate(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/sessions?date=2024-01-01", nil)
 	c.Set("app", a)
-	handleSessionList(c)
+	SessionList(c)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("code = %d, want 200", w.Code)
@@ -792,7 +792,7 @@ func TestHandleSessionList_ByRange(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/sessions?start_date=2024-01-01&end_date=2024-12-31", nil)
 	c.Set("app", a)
-	handleSessionList(c)
+	SessionList(c)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("code = %d, want 200", w.Code)
@@ -812,7 +812,7 @@ func TestHandleTimerSessionCreate(t *testing.T) {
 		strings.NewReader(`{"mode":"countdown","work_duration":1800,"rest_duration":300,"loop_count":4}`))
 	c.Set("app", a)
 
-	handleTimerSessionCreate(c)
+	TimerSessionCreate(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -833,7 +833,7 @@ func TestHandleTimerSessionCreate_Defaults(t *testing.T) {
 		strings.NewReader(`{}`))
 	c.Set("app", a)
 
-	handleTimerSessionCreate(c)
+	TimerSessionCreate(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -853,7 +853,7 @@ func TestHandleTimerSessionList_NoActive(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/timer-sessions", nil)
 	c.Set("app", a)
 
-	handleTimerSessionList(c)
+	TimerSessionList(c)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("code = %d, want 404", w.Code)
@@ -870,7 +870,7 @@ func TestHandleTimerSessionList_ByID(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/timer-sessions",
 		strings.NewReader(`{"mode":"stopwatch","work_duration":600}`))
 	c.Set("app", a)
-	handleTimerSessionCreate(c)
+	TimerSessionCreate(c)
 	var created map[string]any
 	_ = json.Unmarshal(w.Body.Bytes(), &created)
 	id := int64(created["id"].(float64))
@@ -879,17 +879,17 @@ func TestHandleTimerSessionList_ByID(t *testing.T) {
 	c2, _ := gin.CreateTestContext(w2)
 	c2.Request = httptest.NewRequest(http.MethodGet, "/api/timer-sessions?id="+itoa(id), nil)
 	c2.Set("app", a)
-	handleTimerSessionList(c2)
+	TimerSessionList(c2)
 
 	if w2.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w2.Code, w2.Body.String())
 	}
-		// The response uses uppercase field names ("ID" not "id").
-		var got map[string]any
-		_ = json.Unmarshal(w2.Body.Bytes(), &got)
-		if int64(got["id"].(float64)) != id {
-			t.Errorf("id = %v, want %d", got["id"], id)
-		}
+	// The response uses uppercase field names ("ID" not "id").
+	var got map[string]any
+	_ = json.Unmarshal(w2.Body.Bytes(), &got)
+	if int64(got["id"].(float64)) != id {
+		t.Errorf("id = %v, want %d", got["id"], id)
+	}
 }
 
 func TestHandleTimerSessionList_InvalidID(t *testing.T) {
@@ -900,7 +900,7 @@ func TestHandleTimerSessionList_InvalidID(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/timer-sessions?id=notanumber", nil)
 	c.Set("app", a)
 
-	handleTimerSessionList(c)
+	TimerSessionList(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -915,7 +915,7 @@ func TestHandleTimerSessionList_NotFound(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/timer-sessions?id=999999", nil)
 	c.Set("app", a)
 
-	handleTimerSessionList(c)
+	TimerSessionList(c)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("code = %d, want 404", w.Code)
@@ -932,7 +932,7 @@ func TestHandleTimerSessionUpdate(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/timer-sessions",
 		strings.NewReader(`{"mode":"stopwatch","work_duration":600}`))
 	c.Set("app", a)
-	handleTimerSessionCreate(c)
+	TimerSessionCreate(c)
 	var created map[string]any
 	_ = json.Unmarshal(w.Body.Bytes(), &created)
 	id := int64(created["id"].(float64))
@@ -944,7 +944,7 @@ func TestHandleTimerSessionUpdate(t *testing.T) {
 	c2.Params = gin.Params{{Key: "id", Value: itoa(id)}}
 	c2.Set("app", a)
 
-	handleTimerSessionUpdate(c2)
+	TimerSessionUpdate(c2)
 
 	if w2.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w2.Code, w2.Body.String())
@@ -966,7 +966,7 @@ func TestHandleTimerSessionUpdate_InvalidID(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "abc"}}
 	c.Set("app", a)
 
-	handleTimerSessionUpdate(c)
+	TimerSessionUpdate(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -983,7 +983,7 @@ func TestHandleTimerSessionDelete(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/timer-sessions",
 		strings.NewReader(`{"mode":"stopwatch","work_duration":600}`))
 	c.Set("app", a)
-	handleTimerSessionCreate(c)
+	TimerSessionCreate(c)
 	var created map[string]any
 	_ = json.Unmarshal(w.Body.Bytes(), &created)
 	id := int64(created["id"].(float64))
@@ -994,7 +994,7 @@ func TestHandleTimerSessionDelete(t *testing.T) {
 	c2.Params = gin.Params{{Key: "id", Value: itoa(id)}}
 	c2.Set("app", a)
 
-	handleTimerSessionDelete(c2)
+	TimerSessionDelete(c2)
 
 	if w2.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w2.Code, w2.Body.String())
@@ -1015,7 +1015,7 @@ func TestHandleTimerSessionDelete_InvalidID(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "abc"}}
 	c.Set("app", a)
 
-	handleTimerSessionDelete(c)
+	TimerSessionDelete(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -1065,7 +1065,7 @@ func TestHandleSessionDelete(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/sessions",
 		strings.NewReader(`{"habit_id":`+itoa(habitID)+`,"duration_seconds":300,"count":1}`))
 	c.Set("app", a)
-	handleSessionCreate(c)
+	SessionCreate(c)
 	if w.Code != http.StatusOK {
 		t.Fatalf("create failed: code=%d body=%s", w.Code, w.Body.String())
 	}
@@ -1116,7 +1116,7 @@ func TestHandleSessionList_Pagination(t *testing.T) {
 		c.Request = httptest.NewRequest(http.MethodPost, "/api/sessions",
 			strings.NewReader(`{"habit_id":`+itoa(habitID)+`,"duration_seconds":100,"count":1}`))
 		c.Set("app", a)
-		handleSessionCreate(c)
+		SessionCreate(c)
 		if w.Code != http.StatusOK {
 			t.Fatalf("create failed: code=%d body=%s", w.Code, w.Body.String())
 		}
@@ -1127,7 +1127,7 @@ func TestHandleSessionList_Pagination(t *testing.T) {
 	c2, _ := gin.CreateTestContext(w2)
 	c2.Request = httptest.NewRequest(http.MethodGet, "/api/sessions?limit=2", nil)
 	c2.Set("app", a)
-	handleSessionList(c2)
+	SessionList(c2)
 
 	if w2.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w2.Code, w2.Body.String())
@@ -1156,7 +1156,7 @@ func TestHandleHabitList_Pagination(t *testing.T) {
 		c.Request = httptest.NewRequest(http.MethodPost, "/api/habits",
 			strings.NewReader(`{"set_id":`+itoa(setID)+`,"name":"`+name+`","goal_seconds":600}`))
 		c.Set("app", a)
-		handleHabitCreate(c)
+		HabitCreate(c)
 		if w.Code != http.StatusOK {
 			t.Fatalf("create habit: %d", w.Code)
 		}
@@ -1166,7 +1166,7 @@ func TestHandleHabitList_Pagination(t *testing.T) {
 	c2, _ := gin.CreateTestContext(w2)
 	c2.Request = httptest.NewRequest(http.MethodGet, "/api/habits?limit=2", nil)
 	c2.Set("app", a)
-	handleHabitList(c2)
+	HabitList(c2)
 	if w2.Code != http.StatusOK {
 		t.Fatalf("list: %d", w2.Code)
 	}
@@ -1188,7 +1188,7 @@ func TestHandleHabitSetList_Pagination(t *testing.T) {
 		c.Request = httptest.NewRequest(http.MethodPost, "/api/habit-sets",
 			strings.NewReader(`{"name":"`+name+`"}`))
 		c.Set("app", a)
-		handleHabitSetCreate(c)
+		HabitSetCreate(c)
 		if w.Code != http.StatusOK {
 			t.Fatalf("create set: %d", w.Code)
 		}
@@ -1197,7 +1197,7 @@ func TestHandleHabitSetList_Pagination(t *testing.T) {
 	c2, _ := gin.CreateTestContext(w2)
 	c2.Request = httptest.NewRequest(http.MethodGet, "/api/habit-sets?limit=1", nil)
 	c2.Set("app", a)
-	handleHabitSetList(c2)
+	HabitSetList(c2)
 	if w2.Code != http.StatusOK {
 		t.Fatalf("list: %d", w2.Code)
 	}
@@ -1217,7 +1217,7 @@ func TestHandleSessionList_PaginationInvalid(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/sessions?limit=invalid", nil)
 	c.Set("app", a)
-	handleSessionList(c)
+	SessionList(c)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
 	}
@@ -1235,7 +1235,7 @@ func TestHandleHabitStats(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/sessions",
 		strings.NewReader(`{"habit_id":`+itoa(habitID)+`,"duration_seconds":3600,"count":1}`))
 	c.Set("app", a)
-	handleSessionCreate(c)
+	SessionCreate(c)
 	if w.Code != http.StatusOK {
 		t.Fatalf("create session: %d", w.Code)
 	}
@@ -1250,26 +1250,26 @@ func TestHandleHabitStats(t *testing.T) {
 	if w2.Code != http.StatusOK {
 		t.Fatalf("stats: got %d, want 200: %s", w2.Code, w2.Body.String())
 	}
-  var stats map[string]any
-  if err := json.Unmarshal(w2.Body.Bytes(), &stats); err != nil {
-    t.Fatalf("not JSON: %v", err)
-  }
+	var stats map[string]any
+	if err := json.Unmarshal(w2.Body.Bytes(), &stats); err != nil {
+		t.Fatalf("not JSON: %v", err)
+	}
 
-  requiredFields := []string{"total_seconds_week", "total_sessions_week", "current_streak", "longest_streak", "weekly_breakdown"}
-  for _, field := range requiredFields {
-    val, ok := stats[field]
-    if !ok {
-      t.Errorf("missing field %q in stats response", field)
-    } else if val == nil {
-      t.Errorf("field %q is null, want non-nil value", field)
-    }
-  }
+	requiredFields := []string{"total_seconds_week", "total_sessions_week", "weekly_breakdown"}
+	for _, field := range requiredFields {
+		val, ok := stats[field]
+		if !ok {
+			t.Errorf("missing field %q in stats response", field)
+		} else if val == nil {
+			t.Errorf("field %q is null, want non-nil value", field)
+		}
+	}
 
-  if wb, ok := stats["weekly_breakdown"].(map[string]interface{}); ok {
-    _ = wb
-  } else if stats["weekly_breakdown"] != nil {
-    t.Errorf("weekly_breakdown = %T, want map", stats["weekly_breakdown"])
-  }
+	if wb, ok := stats["weekly_breakdown"].(map[string]interface{}); ok {
+		_ = wb
+	} else if stats["weekly_breakdown"] != nil {
+		t.Errorf("weekly_breakdown = %T, want map", stats["weekly_breakdown"])
+	}
 }
 
 func TestHandleHabitStats_NotFound(t *testing.T) {

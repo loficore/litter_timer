@@ -1,11 +1,12 @@
 # Little Timer
 
-Little Timer 是一个基于 Zig 和 WebUI 开发的跨平台定时器应用，支持倒计时、正计时和世界时钟功能。
+Little Timer 是一个基于 Go、Gin、SQLite 和 WebView 开发的跨平台定时器应用，支持倒计时、正计时和世界时钟功能。前端使用 Preact、TypeScript、Vite 和 Tailwind CSS。
 
 ## 项目特点
 
-- 🎯 **跨平台**：支持 Linux 和 Windows（Android 支持计划中）
-- ⚡ **高性能**：使用 Zig 编写的高效后端
+- 🎯 **跨平台**：支持 Linux 和 Windows，Android 提供实验性的 Wails 构建流程
+- ⚡ **可靠后端**：使用 Go、Gin 和 SQLite
+- 🖥️ **桌面运行时**：可选 WebView 窗口，也可使用 HTTP-only 模式
 - 🎨 **现代 UI**：基于 Preact + Tailwind CSS 的响应式界面
 - 🔄 **模块化架构**：清晰的前后端分离设计
 - 📱 **移动友好**：支持触摸操作和移动端适配
@@ -18,25 +19,32 @@ Little Timer 是一个基于 Zig 和 WebUI 开发的跨平台定时器应用，�
 
 ### 桌面端（Linux / WSL / Windows）
 
-Windows建议使用Mingw64,防止出现奇怪的依赖缺失问题.
+默认开发流程会同时启动前端开发服务器和 Go HTTP 后端：
 
 ```bash
-zig build run
+just go-dev
 ```
 
-Zig 会自动下载依赖、编译 C 库并运行应用。
+Linux 上也可以只运行 HTTP-only 后端：
+
+```bash
+cd neo-src
+go run ./cmd/server serve --http-only
+```
+
+需要桌面 WebView 窗口时，使用 `just go-dev-webview`。Linux WebView 运行需要 `webkit2gtk-4.1` 或 `webkitgtk-6.0` 系统库。
 
 ### Android
 
-⚠️ **当前状态**：Android 支持目前在开发中，暂不可用。我们计划在未来版本中提供完整的 Android 支持。
+⚠️ **当前状态**：Android 有基于 Wails 的实验性构建脚本，但仍需要本地 Android SDK、NDK 和 Gradle 环境，不代表 Android 发布版支持已经完成。可使用 `just apk` 构建调试 APK，或使用 `just apk-package` 仅执行 Gradle 打包。
 
 ## 依赖与环境要求
 
-- **Zig**：建议使用0.15.2（用于构建后端与依赖）
-- **Node.js + bun**：用于前端开发与构建（前端代码位于 assets/），建议使用最新版 Bun
-- **系统库**：WebUI 运行时依赖（Linux/Windows 请确保系统环境可正常加载 WebUI 相关动态库）
+- **Go**：使用 `neo-src/go.mod` 声明的 Go 1.25.0
+- **Node.js + pnpm**：用于前端开发与构建（前端代码位于 assets/）
+- **系统库**：桌面 WebView 模式在 Linux 上需要 `webkit2gtk-4.1` 或 `webkitgtk-6.0`
 
-> 若你只运行后端 `zig build run`，前端已构建产物可直接使用；需要修改 UI 时请看下方“前端开发与构建流程”。
+> 若你只运行后端，HTTP-only 模式默认使用已存在的前端产物；需要修改 UI 时请看下方“前端开发与构建流程”。
 
 ## 前端开发与构建流程
 
@@ -44,55 +52,47 @@ Zig 会自动下载依赖、编译 C 库并运行应用。
 
 ```bash
 cd assets
-bun install
+pnpm install
 ```
 
 本地开发（HMR）：
 
 ```bash
-bun run dev
+pnpm run dev
 ```
 
 生产构建（输出到 assets/dist）：
 
 ```bash
-bun run build
+pnpm run build
 ```
 
 代码检查：
 
 ```bash
-bun run lint
+pnpm run lint
 ```
 
 ## 脚本构建与打包
 
-Linux / macOS 构建：
+Linux / macOS Go 构建：
 
 ```bash
-./scripts/build.sh --release --embed-html
-./scripts/build.sh --debug --embed-html
-./scripts/build.sh --debug --no-embed-html
+./scripts/build.sh --go --release
+./scripts/build.sh --go --debug
 ```
 
-Windows 构建（推荐 PowerShell）：
+Windows 构建脚本仍可用，但当前 PowerShell 脚本仍面向旧的桌面构建流程；Go 后端可直接在 `neo-src` 中构建：
 
 ```powershell
-./scripts/build.ps1 --release --embed-html
-./scripts/build.ps1 --debug --embed-html
-./scripts/build.ps1 --debug --no-embed-html
+cd neo-src
+go build -o bin/server ./cmd/server/
 ```
-
-`scripts/build.bat` 仍可用，但仅作为兼容入口并转发到 `build.ps1`。
 
 打包脚本：
 
 ```bash
-./scripts/package_linux.sh --release --embed-html
-./scripts/package_linux.sh --debug --no-embed-html
-
-./scripts/package_mingw64.sh --release --embed-html
-./scripts/package_mingw64.sh --debug --no-embed-html
+./scripts/package_go.sh --version 1.0.0
 ```
 
 ## 配置说明
@@ -111,20 +111,21 @@ Windows 构建（推荐 PowerShell）：
 ## 关于工具使用
 
 ```bash
-# 获取最新版本的变更内容并存入临时文件
-git-cliff --latest --strip header > temp_note.md
+# 构建 Go 后端并运行静态检查
+just go-build
+just go-vet
 
-# 创建 GitHub Release
-gh release create v0.1.0 -F temp_note.md --title "v0.1.0 First Release"
+# 查看可用任务
+just --list
 ```
 
 ## 常见问题
 
 **Q：为什么编译失败？**
-A：确保已安装 Zig 最新版本。第一次构建会自动编译依赖，较为缓慢。
+A：确认 Go 1.25.0、Node.js 和 pnpm 已安装。嵌入前端时还要先在 `assets/` 执行 `pnpm run build`。
 
 **Q：编译很慢？**
-A：第一次编译会编译 webui 的 C 源码。之后使用缓存，速度会快很多。
+A：首次构建会下载 Go 和前端依赖，后续构建会使用本地缓存。
 
 **Q：我想了解更多技术细节？**
-A：参考 [ARCHITECTURE.md](./ARCHITECTURE.md) 和 [ANDROID_BUILD.md](./ANDROID_BUILD.md)。
+A：参考 [neo-src/](./neo-src/) 和 [android/](./android/) 目录。

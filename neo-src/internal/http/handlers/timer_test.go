@@ -66,16 +66,16 @@ func setupTestRouter(t *testing.T, a *app.App) *gin.Engine {
 	})
 
 	// Register timer routes
-	r.GET("/api/state", handleGetState)
-	r.GET("/api/timer/progress", handleGetProgress)
-	r.POST("/api/start", handleStart)
-	r.POST("/api/pause", handlePause)
-	r.POST("/api/reset", handleReset)
-	r.POST("/api/finish", handleFinish)
-	r.POST("/api/mode", handleModeSwitch)
-	r.POST("/api/timer/rest", handleStartRest)
-	r.GET("/api/timer/config", handleConfig)
-	r.POST("/api/timer/config", handleUpdateConfig)
+	r.GET("/api/state", TimerState)
+	r.GET("/api/timer/progress", TimerProgress)
+	r.POST("/api/start", TimerStart)
+	r.POST("/api/pause", TimerPause)
+	r.POST("/api/reset", TimerReset)
+	r.POST("/api/finish", TimerFinish)
+	r.POST("/api/mode", TimerMode)
+	r.POST("/api/timer/rest", TimerStartRest)
+	r.GET("/api/timer/config", TimerConfig)
+	r.POST("/api/timer/config", TimerUpdateConfig)
 
 	return r
 }

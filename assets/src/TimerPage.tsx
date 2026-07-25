@@ -13,7 +13,6 @@ import {
 import { SevenSegmentDisplay } from "./components/SevenSegmentDisplay";
 import { DropdownSelect } from "./components/DropdownSelect";
 import { TimerConfig as TimerConfigComponent } from "./components/TimerConfig";
-import { StarIconComponent } from "./utils/icons";
 import { useSSE } from "./hooks/useSSE";
 import { useFinishTransition } from "./hooks/useFinishTransition";
 import { useTimer } from "./hooks/useTimer";
@@ -448,12 +447,6 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
                             <span className="text-base-content/60">
                                 {t("timer.progress")} {progressPercent}%
                             </span>
-                            {habitDetail.streak > 0 && (
-                                <span className="text-warning inline-flex items-center gap-1">
-                                    <StarIconComponent />
-                                    {habitDetail.streak} {t("timer.streak")}
-                                </span>
-                            )}
                         </div>
                     </div>
                 )}

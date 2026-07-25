@@ -92,7 +92,7 @@ func TestHandleWallpaperUpload(t *testing.T) {
 	c.Request = req
 	c.Set("app", a)
 
-	handleWallpaperUpload(c)
+	WallpaperUpload(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -120,7 +120,7 @@ func TestHandleWallpaperUpload_MissingFile(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/wallpapers", strings.NewReader(""))
 	c.Set("app", a)
 
-	handleWallpaperUpload(c)
+	WallpaperUpload(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code = %d, want 400", w.Code)
@@ -139,7 +139,7 @@ func TestHandleWallpaperList(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/wallpapers", nil)
 	c.Set("app", a)
 
-	handleWallpaperList(c)
+	WallpaperList(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -173,7 +173,7 @@ func TestHandleWallpaperList_Empty(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/wallpapers", nil)
 	c.Set("app", a)
 
-	handleWallpaperList(c)
+	WallpaperList(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d", w.Code)
@@ -199,7 +199,7 @@ func TestHandleWallpaperServe(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: filename}}
 	c.Set("app", a)
 
-	handleWallpaperServe(c)
+	WallpaperServe(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -223,7 +223,7 @@ func TestHandleWallpaperServe_NotFound(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "nonexistent.png"}}
 	c.Set("app", a)
 
-	handleWallpaperServe(c)
+	WallpaperServe(c)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("code = %d, want 404", w.Code)
@@ -241,7 +241,7 @@ func TestHandleWallpaperServe_InvalidFilename(t *testing.T) {
 		c.Request = httptest.NewRequest(http.MethodGet, "/api/wallpapers/"+filename, nil)
 		c.Set("app", a)
 
-		handleWallpaperServe(c)
+		WallpaperServe(c)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("filename %q: code = %d, want 400", filename, w.Code)
@@ -265,7 +265,7 @@ func TestHandleWallpaperDelete(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: filename}}
 	c.Set("app", a)
 
-	handleWallpaperDelete(c)
+	WallpaperDelete(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -293,7 +293,7 @@ func TestHandleWallpaperDelete_NotFound(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "nonexistent.png"}}
 	c.Set("app", a)
 
-	handleWallpaperDelete(c)
+	WallpaperDelete(c)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("code = %d, want 500", w.Code)
@@ -311,7 +311,7 @@ func TestHandleWallpaperDelete_InvalidFilename(t *testing.T) {
 		c.Request = httptest.NewRequest(http.MethodDelete, "/api/wallpapers/"+filename, nil)
 		c.Set("app", a)
 
-		handleWallpaperDelete(c)
+		WallpaperDelete(c)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("filename %q: code = %d, want 400", filename, w.Code)
@@ -406,8 +406,8 @@ type testMultipartFile struct {
 	io.Reader
 }
 
-func (f *testMultipartFile) Close() error                  { return nil }
-func (f *testMultipartFile) ReadAt(p []byte, off int64) (int, error) { return f.Reader.Read(p) }
+func (f *testMultipartFile) Close() error                                 { return nil }
+func (f *testMultipartFile) ReadAt(p []byte, off int64) (int, error)      { return f.Reader.Read(p) }
 func (f *testMultipartFile) Seek(offset int64, whence int) (int64, error) { return 0, nil }
 
 // ---------------------------------------------------------------------------
@@ -432,7 +432,7 @@ func TestHandleWallpaperFromURL(t *testing.T) {
 		c.Request.Header.Set("Content-Type", "application/json")
 		c.Set("app", a)
 
-		handleWallpaperFromURL(c)
+		WallpaperFromURL(c)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -468,7 +468,7 @@ func TestHandleWallpaperFromURL(t *testing.T) {
 		c.Request.Header.Set("Content-Type", "application/json")
 		c.Set("app", a)
 
-		handleWallpaperFromURL(c)
+		WallpaperFromURL(c)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -506,7 +506,7 @@ func TestHandleWallpaperFromURL(t *testing.T) {
 		c.Request.Header.Set("Content-Type", "application/json")
 		c.Set("app", a)
 
-		handleWallpaperFromURL(c)
+		WallpaperFromURL(c)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
@@ -535,7 +535,7 @@ func TestHandleWallpaperFromURL(t *testing.T) {
 		c.Request.Header.Set("Content-Type", "application/json")
 		c.Set("app", a)
 
-		handleWallpaperFromURL(c)
+		WallpaperFromURL(c)
 
 		if w.Code != http.StatusUnsupportedMediaType {
 			t.Errorf("code = %d, want 415", w.Code)
@@ -568,7 +568,7 @@ func TestHandleWallpaperFromURL(t *testing.T) {
 		c.Request.Header.Set("Content-Type", "application/json")
 		c.Set("app", a)
 
-		handleWallpaperFromURL(c)
+		WallpaperFromURL(c)
 
 		if w.Code != http.StatusRequestEntityTooLarge {
 			t.Errorf("code = %d, want 413", w.Code)
@@ -600,7 +600,7 @@ func TestHandleWallpaperFromURL(t *testing.T) {
 		c.Request = req
 		c.Set("app", a)
 
-		handleWallpaperFromURL(c)
+		WallpaperFromURL(c)
 
 		if w.Code != http.StatusGatewayTimeout {
 			t.Errorf("code = %d, want 504", w.Code)
@@ -623,7 +623,7 @@ func TestHandleWallpaperFromURL(t *testing.T) {
 		c.Request.Header.Set("Content-Type", "application/json")
 		c.Set("app", a)
 
-		handleWallpaperFromURL(c)
+		WallpaperFromURL(c)
 
 		if w.Code != http.StatusBadGateway {
 			t.Errorf("code = %d, want 502", w.Code)
@@ -640,7 +640,7 @@ func TestHandleWallpaperFromURL(t *testing.T) {
 		c.Request.Header.Set("Content-Type", "application/json")
 		c.Set("app", a)
 
-		handleWallpaperFromURL(c)
+		WallpaperFromURL(c)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("code = %d, want 400", w.Code)
@@ -658,7 +658,7 @@ func TestHandleWallpaperFromURL(t *testing.T) {
 		c.Request.Header.Set("Content-Type", "application/json")
 		c.Set("app", a)
 
-		handleWallpaperFromURL(c)
+		WallpaperFromURL(c)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("code = %d, want 400", w.Code)

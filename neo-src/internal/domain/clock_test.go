@@ -20,7 +20,39 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 )
+
+func TestTodayStringOffsetArithmetic(t *testing.T) {
+	tests := []struct {
+		name   string
+		offset int8
+		want   string
+	}{
+		{name: "UTC-8", offset: -8, want: "2024-01-14"},
+		{name: "UTC", offset: 0, want: "2024-01-15"},
+		{name: "UTC+8", offset: 8, want: "2024-01-15"},
+		{name: "boundary crosses into next date", offset: 8, want: "2024-01-16"},
+	}
+	times := []time.Time{
+		time.Date(2024, time.January, 15, 0, 30, 0, 0, time.UTC),
+		time.Date(2024, time.January, 15, 12, 0, 0, 0, time.UTC),
+		time.Date(2024, time.January, 15, 0, 30, 0, 0, time.UTC),
+		time.Date(2024, time.January, 15, 23, 30, 0, 0, time.UTC),
+	}
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			previousNow := now
+			now = func() time.Time { return times[i] }
+			defer func() { now = previousNow }()
+
+			got := TodayString(tt.offset)
+			if got != tt.want {
+				t.Errorf("offset %d: got %q, want %q", tt.offset, got, tt.want)
+			}
+		})
+	}
+}
 
 // -----------------------------------------------------------------------------
 // Small assertion helpers — ponytail prefers stdlib-only, but a two-line

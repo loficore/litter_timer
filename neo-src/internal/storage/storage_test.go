@@ -439,6 +439,49 @@ func TestHabitCRUDLifecycle(t *testing.T) {
 	}
 }
 
+func TestHabitNameExistsInSet(t *testing.T) {
+	m := openTempSqlite(t)
+	setID, err := m.HabitSets().Create("Set A", "", "#000")
+	if err != nil {
+		t.Fatalf("HabitSets.Create: %v", err)
+	}
+	otherSetID, err := m.HabitSets().Create("Set B", "", "#000")
+	if err != nil {
+		t.Fatalf("HabitSets.Create other set: %v", err)
+	}
+
+	habitID, err := m.Habits().Create(setID, "Read", 600, "#fff")
+	if err != nil {
+		t.Fatalf("Habits.Create: %v", err)
+	}
+	if _, err := m.Habits().Create(setID, "Write", 600, "#fff"); err != nil {
+		t.Fatalf("Habits.Create other habit: %v", err)
+	}
+	tests := []struct {
+		name      string
+		setID     int64
+		queryName string
+		excludeID *int64
+		want      bool
+	}{
+		{name: "same set existing name", setID: setID, queryName: "Read", want: true},
+		{name: "different set does not conflict", setID: otherSetID, queryName: "Read", want: false},
+		{name: "self update is excluded", setID: setID, queryName: "Read", excludeID: &habitID, want: false},
+		{name: "different existing ID still conflicts", setID: setID, queryName: "Write", excludeID: &habitID, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := m.Habits().NameExistsInSet(tt.setID, tt.queryName, tt.excludeID)
+			if err != nil {
+				t.Fatalf("NameExistsInSet: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("NameExistsInSet = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestTimerSessionCRUD(t *testing.T) {
 	m := openTempSqlite(t)
 
