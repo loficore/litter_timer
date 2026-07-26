@@ -75,7 +75,7 @@ describe("HabitPicker 组件", () => {
       />
     );
 
-    expect(screen.getByText("暂无习惯")).toBeTruthy();
+    expect(screen.getByText("暂无习惯，点击下方添加")).toBeTruthy();
   });
 
   it("关闭时不应该渲染", () => {
