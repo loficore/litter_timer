@@ -15,12 +15,16 @@ package backup
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"little-timer/internal/domain"
@@ -123,6 +127,15 @@ func (m *BackupManager) SetMaxBackups(n int) {
 
 // CreateBackup generates a new backup file and uploads it via the
 // configured adapter.  Mirrors `pub fn createBackup`.
+//
+// Uses VACUUM INTO for a hot snapshot (requires SQLite >= 3.27.0)
+// instead of the old wal_checkpoint + direct copy.  SHA-256 is computed
+// from the snapshot before upload, then verified by downloading the
+// uploaded copy and comparing digests.
+//
+// Manifest writes are best-effort: the uploaded .db file is the source
+// of truth (already SHA-256-verified), so a manifest build/write
+// failure is logged as a warning and does not fail the backup.
 func (m *BackupManager) CreateBackup() (string, error) {
 	if m.sqlite == nil || !m.sqlite.IsOpen() {
 		return "", fmt.Errorf("%w: sqlite not open", ErrBackupFailed)
@@ -130,33 +143,96 @@ func (m *BackupManager) CreateBackup() (string, error) {
 	ts := time.Now().Unix()
 	name := fmt.Sprintf("%s%d%s", filenamePrefix, ts, filenameSuffix)
 
-	// Flush WAL so the on-disk file is consistent.  database/sql doesn't
-	// surface `wal_checkpoint` via stdlib; the SQL "PRAGMA wal_checkpoint
-	// (TRUNCATE)" is the canonical hook.
-	if _, err := m.sqlite.DB().Exec("PRAGMA wal_checkpoint(TRUNCATE);"); err != nil {
-		log.Error("CreateBackup: checkpoint failed", "error", err.Error())
-		return "", fmt.Errorf("%w: wal_checkpoint: %v", ErrBackupFailed, err)
+	// Create temp file for VACUUM INTO hot backup.
+	tmp, err := os.CreateTemp(filepath.Dir(m.dbPath), "lt_backup_*.db")
+	if err != nil {
+		return "", fmt.Errorf("%w: tempfile: %v", ErrBackupFailed, err)
+	}
+	tmpPath := tmp.Name()
+	if err := tmp.Close(); err != nil {
+		log.Warn("CreateBackup: temp close failed", "error", err.Error())
+	}
+	defer os.Remove(tmpPath)
+
+	// Hot backup: VACUUM INTO writes a consistent snapshot to the temp
+	// file.  Requires a brief exclusive lock; acceptable for infrequent
+	// backups.  SQLite does not support bind parameters for VACUUM INTO,
+	// so single quotes in the path must be escaped by doubling them.
+	escapedPath := strings.ReplaceAll(tmpPath, "'", "''")
+	if _, err := m.sqlite.DB().Exec(fmt.Sprintf("VACUUM INTO '%s'", escapedPath)); err != nil {
+		log.Error("CreateBackup: vacuum failed", "error", err.Error())
+		return "", fmt.Errorf("%w: vacuum into: %v", ErrBackupFailed, err)
 	}
 
-	if err := m.adapter.Backup(m.dbPath, name); err != nil {
-		log.Error("CreateBackup: backup failed", "error", err.Error())
+	// Compute SHA-256 from the temp file before upload.
+	hash, err := sha256File(tmpPath)
+	if err != nil {
+		log.Error("CreateBackup: sha256 failed", "error", err.Error())
+		return "", fmt.Errorf("%w: sha256: %v", ErrBackupFailed, err)
+	}
+
+	// Get file size for the manifest.
+	fi, err := os.Stat(tmpPath)
+	if err != nil {
+		log.Error("CreateBackup: stat failed", "error", err.Error())
+		return "", fmt.Errorf("%w: stat: %v", ErrBackupFailed, err)
+	}
+	sizeBytes := uint64(fi.Size())
+
+	// Upload the temp file.
+	if err := m.adapter.Backup(tmpPath, name); err != nil {
+		log.Error("CreateBackup: upload failed", "error", err.Error())
 		return "", err
 	}
 
-	if m.adapter.Target() == "webdav" { // Use string comparison for backup.BackupTarget vs domain.BackupTargetType
-		manifest, err := m.buildManifest(name, ts)
-		if err != nil {
-			log.Error("CreateBackup: build manifest failed", "error", err.Error())
-		} else if err := m.adapter.WriteManifest("", manifest); err != nil {
-			log.Error("CreateBackup: write manifest failed", "error", err.Error())
+	// GET-back verify: download the uploaded backup and compare SHA-256.
+	tmpVerify, err := os.CreateTemp(filepath.Dir(m.dbPath), "lt_verify_*.db")
+	if err != nil {
+		log.Error("CreateBackup: verify tempfile failed", "error", err.Error())
+		return "", fmt.Errorf("%w: verify temp: %v", ErrBackupFailed, err)
+	}
+	tmpVerifyPath := tmpVerify.Name()
+	if err := tmpVerify.Close(); err != nil {
+		log.Warn("CreateBackup: verify temp close failed", "error", err.Error())
+	}
+	defer os.Remove(tmpVerifyPath)
+
+	if err := m.adapter.Restore(name, tmpVerifyPath); err != nil {
+		log.Error("CreateBackup: verify restore failed", "error", err.Error())
+		return "", fmt.Errorf("%w: verify restore: %v", ErrBackupFailed, err)
+	}
+
+	verifyHash, err := sha256File(tmpVerifyPath)
+	if err != nil {
+		log.Error("CreateBackup: verify sha256 failed", "error", err.Error())
+		return "", fmt.Errorf("%w: verify sha256: %v", ErrBackupFailed, err)
+	}
+
+	if hash != verifyHash {
+		log.Error("CreateBackup: sha256 mismatch",
+			"expected", hash, "got", verifyHash)
+		// Best-effort delete the corrupted backup.
+		if delErr := m.adapter.Delete(name); delErr != nil {
+			log.Error("CreateBackup: delete after mismatch failed", "error", delErr.Error())
 		}
+		return "", fmt.Errorf("%w: sha256 mismatch", ErrBackupFailed)
+	}
+
+	// Write manifest for ALL targets.  Best-effort: the uploaded .db is
+	// already SHA-256-verified, so a manifest failure only degrades the
+	// convenience index — log a warning, do not fail the backup.
+	manifest, err := m.buildManifest(name, ts, hash, sizeBytes)
+	if err != nil {
+		log.Warn("CreateBackup: build manifest failed", "error", err.Error())
+	} else if err := m.adapter.WriteManifest(manifest); err != nil {
+		log.Warn("CreateBackup: write manifest failed", "error", err.Error())
 	}
 
 	if err := m.cleanupOldBackups(); err != nil {
 		// Retention is best-effort; log but don't fail the backup.
 		log.Error("CreateBackup: cleanup failed", "error", err.Error())
 	}
-	log.Info("CreateBackup: success", "name", name)
+	log.Info("CreateBackup: success", "name", name, "sha256", hash)
 	return name, nil
 }
 
@@ -173,7 +249,9 @@ func (m *BackupManager) RestoreFromBackup(name string) error {
 		return fmt.Errorf("%w: tempfile: %v", ErrRestoreFailed, err)
 	}
 	tmpPath := tmp.Name()
-	_ = tmp.Close()
+	if err := tmp.Close(); err != nil {
+		log.Warn("RestoreFromBackup: temp close failed", "error", err.Error())
+	}
 	defer os.Remove(tmpPath)
 
 	if err := m.adapter.Restore(name, tmpPath); err != nil {
@@ -186,25 +264,46 @@ func (m *BackupManager) RestoreFromBackup(name string) error {
 }
 
 // buildManifest creates the manifest JSON string for WriteManifest.
-func (m *BackupManager) buildManifest(backupName string, timestamp int64) (string, error) {
+// sha256 and sizeBytes are populated from the just-created backup file
+// so every entry carries integrity metadata.
+func (m *BackupManager) buildManifest(backupName string, timestamp int64, sha256hash string, sizeBytes uint64) (string, error) {
 	backups, err := m.adapter.List()
 	if err != nil {
 		return "", fmt.Errorf("list backups: %w", err)
 	}
 
-	backups = append(backups, BackupInfo{
+	type manifestBackup struct {
+		Name      string `json:"name"`
+		Timestamp int64  `json:"timestamp"`
+		SizeBytes uint64 `json:"size_bytes"`
+		SHA256    string `json:"sha256"`
+	}
+
+	manifestBackups := make([]manifestBackup, 0, len(backups)+1)
+	for _, b := range backups {
+		if b.Name == backupName {
+			continue // skip the just-created backup; it's appended below with SHA256
+		}
+		manifestBackups = append(manifestBackups, manifestBackup{
+			Name:      b.Name,
+			Timestamp: b.Timestamp,
+			SizeBytes: b.SizeBytes,
+		})
+	}
+	manifestBackups = append(manifestBackups, manifestBackup{
 		Name:      backupName,
 		Timestamp: timestamp,
-		SizeBytes: 0, // Caller should populate from source file if needed.
+		SizeBytes: sizeBytes,
+		SHA256:    sha256hash,
 	})
 
 	manifest := struct {
-		Version  int           `json:"version"`
-		Backups  []BackupInfo  `json:"backups"`
-		DBVersion string       `json:"db_version"`
+		Version   int              `json:"version"`
+		Backups   []manifestBackup `json:"backups"`
+		DBVersion string           `json:"db_version"`
 	}{
-		Version:  1,
-		Backups:  backups,
+		Version:   1,
+		Backups:   manifestBackups,
 		DBVersion: "1.0",
 	}
 
@@ -284,6 +383,20 @@ func (m *BackupManager) Summary() (BackupSummary, error) {
 		OldestBackup:   sorted[0].Name,
 		NewestBackup:   sorted[len(sorted)-1].Name,
 	}, nil
+}
+
+// sha256File computes the SHA-256 hex digest of a file via streaming.
+func sha256File(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // cleanupOldBackups trims the adapter down to m.maxBackups entries by

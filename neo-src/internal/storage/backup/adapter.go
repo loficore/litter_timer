@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -43,6 +44,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // -----------------------------------------------------------------------------
@@ -111,7 +114,7 @@ type BackupAdapter interface {
 	// TestConnection validates credentials / network reachability.
 	TestConnection() error
 	// WriteManifest writes the backup manifest JSON to the adapter's base path.
-	WriteManifest(path string, data string) error
+	WriteManifest(data string) error
 	// Target returns the discriminator (local / webdav / s3).
 	Target() BackupTarget
 }
@@ -137,6 +140,26 @@ func (l *LocalAdapter) Target() BackupTarget { return TargetLocal }
 func (l *LocalAdapter) TestConnection() error {
 	if err := os.MkdirAll(l.path, 0o700); err != nil {
 		return fmt.Errorf("%w: mkdir %s: %v", ErrConnectionFailed, l.path, err)
+	}
+	probeName := fmt.Sprintf("lt_probe_%d.tmp", time.Now().UnixNano())
+	probePath := filepath.Join(l.path, probeName)
+	probeContent := []byte("lt-probe-ok")
+
+	if err := os.WriteFile(probePath, probeContent, 0o600); err != nil {
+		_ = os.Remove(probePath)
+		return fmt.Errorf("%w: write probe: %v", ErrConnectionFailed, err)
+	}
+	got, err := os.ReadFile(probePath)
+	if err != nil {
+		_ = os.Remove(probePath)
+		return fmt.Errorf("%w: read probe: %v", ErrConnectionFailed, err)
+	}
+	if !bytes.Equal(got, probeContent) {
+		_ = os.Remove(probePath)
+		return fmt.Errorf("%w: probe content mismatch", ErrConnectionFailed)
+	}
+	if err := os.Remove(probePath); err != nil {
+		return fmt.Errorf("%w: delete probe: %v", ErrConnectionFailed, err)
 	}
 	return nil
 }
@@ -208,11 +231,11 @@ func (l *LocalAdapter) List() ([]BackupInfo, error) {
 			SizeBytes: uint64(info.Size()),
 		})
 	}
-		return out, nil
+	return out, nil
 }
 
-func (l *LocalAdapter) WriteManifest(path, data string) error {
-	return nil
+func (l *LocalAdapter) WriteManifest(data string) error {
+	return os.WriteFile(filepath.Join(l.path, "manifest.json"), []byte(data), 0o600)
 }
 
 // -----------------------------------------------------------------------------
@@ -246,26 +269,89 @@ type WebDAVAdapter struct {
 
 func (w *WebDAVAdapter) Target() BackupTarget { return TargetWebDAV }
 
-// TestConnection issues a PROPFIND on the base path and checks the
-// status.  WebDAV's "207 Multi-Status" is the canonical success.
+// TestConnection performs a PUT-probe -> GET-verify -> DELETE-cleanup
+// write cycle on the base path to confirm the WebDAV server is writable.
 func (w *WebDAVAdapter) TestConnection() error {
-	url := w.joinURL(w.basePathWithSlash(), "")
-	req, err := http.NewRequest(http.MethodOptions, url, nil)
+	probeName := fmt.Sprintf("lt_probe_%d.tmp", time.Now().UnixNano())
+	probeURL := w.joinURL(w.basePathWithSlash(), probeName)
+	probeContent := []byte("lt-probe-ok")
+
+	putReq, err := http.NewRequest(http.MethodPut, probeURL, bytes.NewReader(probeContent))
 	if err != nil {
-		return fmt.Errorf("%w: build OPTIONS: %v", ErrConnectionFailed, err)
+		return fmt.Errorf("%w: build PUT probe: %v", ErrConnectionFailed, err)
+	}
+	putReq.Header.Set("Content-Type", "application/octet-stream")
+	w.applyAuth(putReq)
+	putResp, err := w.client.Do(putReq)
+	if err != nil {
+		return fmt.Errorf("%w: PUT probe: %v", ErrConnectionFailed, err)
+	}
+	putResp.Body.Close()
+	if putResp.StatusCode == http.StatusUnauthorized {
+		_ = w.deleteProbe(probeURL)
+		return fmt.Errorf("%w: PUT probe status %d", ErrAuthenticationFail, putResp.StatusCode)
+	}
+	if putResp.StatusCode == http.StatusForbidden {
+		_ = w.deleteProbe(probeURL)
+		return fmt.Errorf("%w: PUT probe status %d", ErrPermissionDenied, putResp.StatusCode)
+	}
+	if putResp.StatusCode >= 300 {
+		_ = w.deleteProbe(probeURL)
+		return fmt.Errorf("%w: PUT probe status %d", ErrConnectionFailed, putResp.StatusCode)
+	}
+
+	getReq, err := http.NewRequest(http.MethodGet, probeURL, nil)
+	if err != nil {
+		_ = w.deleteProbe(probeURL)
+		return fmt.Errorf("%w: build GET probe: %v", ErrConnectionFailed, err)
+	}
+	w.applyAuth(getReq)
+	getResp, err := w.client.Do(getReq)
+	if err != nil {
+		_ = w.deleteProbe(probeURL)
+		return fmt.Errorf("%w: GET probe: %v", ErrConnectionFailed, err)
+	}
+	if getResp.StatusCode >= 300 {
+		getResp.Body.Close()
+		_ = w.deleteProbe(probeURL)
+		if getResp.StatusCode == http.StatusUnauthorized {
+			return fmt.Errorf("%w: GET probe status %d", ErrAuthenticationFail, getResp.StatusCode)
+		}
+		if getResp.StatusCode == http.StatusForbidden {
+			return fmt.Errorf("%w: GET probe status %d", ErrPermissionDenied, getResp.StatusCode)
+		}
+		return fmt.Errorf("%w: GET probe status %d", ErrConnectionFailed, getResp.StatusCode)
+	}
+	got, err := io.ReadAll(getResp.Body)
+	getResp.Body.Close()
+	if err != nil {
+		_ = w.deleteProbe(probeURL)
+		return fmt.Errorf("%w: read GET probe: %v", ErrConnectionFailed, err)
+	}
+	if !bytes.Equal(got, probeContent) {
+		_ = w.deleteProbe(probeURL)
+		return fmt.Errorf("%w: probe content mismatch", ErrConnectionFailed)
+	}
+
+	if err := w.deleteProbe(probeURL); err != nil {
+		return fmt.Errorf("%w: DELETE probe: %v", ErrConnectionFailed, err)
+	}
+	return nil
+}
+
+// deleteProbe sends a DELETE request for the probe URL; errors are
+// swallowed (used for best-effort cleanup in TestConnection).
+func (w *WebDAVAdapter) deleteProbe(probeURL string) error {
+	req, err := http.NewRequest(http.MethodDelete, probeURL, nil)
+	if err != nil {
+		return err
 	}
 	w.applyAuth(req)
 	resp, err := w.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrConnectionFailed, err)
+		return err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return fmt.Errorf("%w: status %d", ErrAuthenticationFail, resp.StatusCode)
-	}
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("%w: status %d", ErrNetworkError, resp.StatusCode)
-	}
+	resp.Body.Close()
 	return nil
 }
 
@@ -292,7 +378,7 @@ func (w *WebDAVAdapter) Backup(srcPath, backupName string) error {
 	return nil
 }
 
-func (w *WebDAVAdapter) WriteManifest(path, data string) error {
+func (w *WebDAVAdapter) WriteManifest(data string) error {
 	url := w.joinURL(w.basePathWithSlash(), "manifest.json")
 	req, err := http.NewRequest(http.MethodPut, url, strings.NewReader(data))
 	if err != nil {
@@ -386,9 +472,9 @@ type webdavResponse struct {
 	Href      string   `xml:"href"`
 	PropStats []struct {
 		Prop struct {
-			GetLastModified   string `xml:"getlastmodified"`
-			GetContentLength  int64  `xml:"getcontentlength"`
-			ResourceType      struct {
+			GetLastModified  string `xml:"getlastmodified"`
+			GetContentLength int64  `xml:"getcontentlength"`
+			ResourceType     struct {
 				Collection *struct{} `xml:"collection"`
 			} `xml:"resourcetype"`
 		} `xml:"prop"`
@@ -483,6 +569,16 @@ type S3Config struct {
 	PathStyle bool
 }
 
+// S3APIClient is the subset of *s3.Client methods used by S3Adapter.
+// Extracted as an interface so tests can substitute a fake S3 client.
+type S3APIClient interface {
+	HeadBucket(ctx context.Context, params *s3.HeadBucketInput, optFns ...func(*s3.Options)) (*s3.HeadBucketOutput, error)
+	PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+	GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+	DeleteObject(ctx context.Context, params *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
+	ListObjectsV2(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
+}
+
 // NewS3Adapter constructs an S3Adapter with an inline AWS config
 // (AccessKey + SecretKey).  Endpoint / region are taken from cfg.
 func NewS3Adapter(ctx context.Context, cfg S3Config) (*S3Adapter, error) {
@@ -513,7 +609,7 @@ func NewS3Adapter(ctx context.Context, cfg S3Config) (*S3Adapter, error) {
 
 type S3Adapter struct {
 	cfg    S3Config
-	client *s3.Client
+	client S3APIClient
 }
 
 func (s *S3Adapter) Target() BackupTarget { return TargetS3 }
@@ -525,11 +621,58 @@ func (s *S3Adapter) keyFor(backupName string) string {
 func (s *S3Adapter) TestConnection() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+
 	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(s.cfg.Bucket)})
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrConnectionFailed, err)
+		return fmt.Errorf("%w: HeadBucket: %v", classifyS3Error(err), err)
+	}
+
+	probeName := fmt.Sprintf("lt_probe_%d.tmp", time.Now().UnixNano())
+	probeKey := s.keyFor(probeName)
+	probeContent := strings.NewReader("lt-probe-ok")
+
+	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(s.cfg.Bucket),
+		Key:    aws.String(probeKey),
+		Body:   probeContent,
+	})
+	if err != nil {
+		_ = s.deleteProbeKey(ctx, probeKey)
+		return fmt.Errorf("%w: PutObject probe: %v", classifyS3Error(err), err)
+	}
+
+	getOut, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.cfg.Bucket),
+		Key:    aws.String(probeKey),
+	})
+	if err != nil {
+		_ = s.deleteProbeKey(ctx, probeKey)
+		return fmt.Errorf("%w: GetObject probe: %v", classifyS3Error(err), err)
+	}
+	if getOut.Body == nil {
+		_ = s.deleteProbeKey(ctx, probeKey)
+		return fmt.Errorf("%w: GetObject returned nil body", ErrConnectionFailed)
+	}
+	got, err := io.ReadAll(getOut.Body)
+	getOut.Body.Close()
+	if err != nil || string(got) != "lt-probe-ok" {
+		_ = s.deleteProbeKey(ctx, probeKey)
+		return fmt.Errorf("%w: probe content mismatch", ErrConnectionFailed)
+	}
+
+	if err := s.deleteProbeKey(ctx, probeKey); err != nil {
+		return fmt.Errorf("%w: DeleteObject probe: %v", classifyS3Error(err), err)
 	}
 	return nil
+}
+
+// deleteProbeKey sends a best-effort DeleteObject; errors are swallowed.
+func (s *S3Adapter) deleteProbeKey(ctx context.Context, key string) error {
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.cfg.Bucket),
+		Key:    aws.String(key),
+	})
+	return err
 }
 
 func (s *S3Adapter) Backup(srcPath, backupName string) error {
@@ -546,7 +689,7 @@ func (s *S3Adapter) Backup(srcPath, backupName string) error {
 		Body:   body,
 	})
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrBackupFailed, err)
+		return fmt.Errorf("%w: %v", classifyS3Error(err), err)
 	}
 	return nil
 }
@@ -559,11 +702,7 @@ func (s *S3Adapter) Restore(backupName, destPath string) error {
 		Key:    aws.String(s.keyFor(backupName)),
 	})
 	if err != nil {
-		var nsk *types.NoSuchKey
-		if errors.As(err, &nsk) {
-			return fmt.Errorf("%w: %s", ErrFileNotFound, backupName)
-		}
-		return fmt.Errorf("%w: %v", ErrRestoreFailed, err)
+		return fmt.Errorf("%w: %v", classifyS3Error(err), err)
 	}
 	defer out.Body.Close()
 	dst, err := os.Create(destPath)
@@ -585,12 +724,24 @@ func (s *S3Adapter) Delete(backupName string) error {
 		Key:    aws.String(s.keyFor(backupName)),
 	})
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrBackupFailed, err)
+		return fmt.Errorf("%w: %v", classifyS3Error(err), err)
 	}
 	return nil
 }
 
-func (s *S3Adapter) WriteManifest(path, data string) error {
+func (s *S3Adapter) WriteManifest(data string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	manifestKey := s.keyFor("manifest.json")
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(s.cfg.Bucket),
+		Key:         aws.String(manifestKey),
+		Body:        strings.NewReader(data),
+		ContentType: aws.String("application/json"),
+	})
+	if err != nil {
+		return fmt.Errorf("%w: %v", classifyS3Error(err), err)
+	}
 	return nil
 }
 
@@ -602,7 +753,7 @@ func (s *S3Adapter) List() ([]BackupInfo, error) {
 		Prefix: aws.String(strings.TrimRight(s.cfg.PathPrefix, "/") + "/"),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrBackupFailed, err)
+		return nil, fmt.Errorf("%w: %v", classifyS3Error(err), err)
 	}
 	results := make([]BackupInfo, 0, len(out.Contents))
 	for _, obj := range out.Contents {
@@ -619,9 +770,14 @@ func (s *S3Adapter) List() ([]BackupInfo, error) {
 		if obj.Size != nil {
 			size = uint64(*obj.Size)
 		}
+		// Timestamp from filename (matches Local/WebDAV); LastModified is only a fallback.
+		ts := obj.LastModified.Unix()
+		if parsed, ok := timestampFromName(name); ok {
+			ts = parsed
+		}
 		results = append(results, BackupInfo{
 			Name:      name,
-			Timestamp: obj.LastModified.Unix(),
+			Timestamp: ts,
 			SizeBytes: size,
 		})
 	}
@@ -631,6 +787,45 @@ func (s *S3Adapter) List() ([]BackupInfo, error) {
 // -----------------------------------------------------------------------------
 // Shared helpers.
 // -----------------------------------------------------------------------------
+
+// classifyS3Error maps S3 SDK error types to sentinel BackupError values.
+func classifyS3Error(err error) error {
+	var (
+		nsb *types.NoSuchBucket
+		nsk *types.NoSuchKey
+		gae *smithy.GenericAPIError
+		re  *smithyhttp.ResponseError
+		ue  *url.Error
+	)
+	switch {
+	case errors.As(err, &nsb):
+		return ErrFileNotFound
+	case errors.As(err, &nsk):
+		return ErrFileNotFound
+	case errors.As(err, &gae):
+		switch gae.Code {
+		case "InvalidAccessKeyId", "SignatureDoesNotMatch":
+			return ErrAuthenticationFail
+		case "AccessDenied":
+			return ErrPermissionDenied
+		}
+		return ErrConnectionFailed
+	case errors.As(err, &re):
+		switch re.HTTPStatusCode() {
+		case 401:
+			return ErrAuthenticationFail
+		case 403:
+			return ErrPermissionDenied
+		case 404:
+			return ErrFileNotFound
+		default:
+			return ErrNetworkError
+		}
+	case errors.As(err, &ue):
+		return ErrNetworkError
+	}
+	return ErrConnectionFailed
+}
 
 // copyFile does a streaming copy + chmod (0600) — mirrors Zig
 // `std.fs.cwd().copyFile`.

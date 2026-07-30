@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -123,6 +124,86 @@ func TestHandleBackupConfigUpdate_CloudWithoutMasterPassword(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	body := strings.NewReader(`{"enabled":true,"target_type":"webdav","webdav_url":"http://example.com"}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/config", body)
+	c.Set("app", a)
+
+	BackupConfigUpdate(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("code = %d", w.Code)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response not JSON: %v", err)
+	}
+	if got["error"] != "master_password_required" {
+		t.Errorf("error = %v, want master_password_required", got["error"])
+	}
+}
+
+func TestHandleBackupConfigUpdate_S3(t *testing.T) {
+	a, _ := newBackupTestApp(t)
+	gin.SetMode(gin.TestMode)
+
+	// Given: S3 updates require an unlocked master password.
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := strings.NewReader(`{"password":"testpass123"}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/master-password", body)
+	c.Set("app", a)
+	MasterPasswordSet(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("master-password code = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(w)
+	body = strings.NewReader(`{"enabled":true,"target_type":"s3","s3_endpoint":"https://s3.example.com","s3_bucket":"my-bucket","s3_region":"us-east-1","s3_access_key":"AKIAEXAMPLE","s3_secret_key":"secret","s3_path_prefix":"backups"}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/config", body)
+	c.Set("app", a)
+
+	BackupConfigUpdate(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response not JSON: %v", err)
+	}
+	if got["success"] != true {
+		t.Errorf("success = %v, want true", got["success"])
+	}
+
+	// When: the persisted config is read back and reflects the S3 settings.
+	w = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/backup/config", nil)
+	c.Set("app", a)
+	BackupConfigGet(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("get code = %d, body = %s", w.Code, w.Body.String())
+	}
+	var gotCfg map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &gotCfg); err != nil {
+		t.Fatalf("config response not JSON: %v", err)
+	}
+	if gotCfg["target_type"] != "s3" {
+		t.Errorf("target_type = %v, want s3", gotCfg["target_type"])
+	}
+	if gotCfg["s3_bucket"] != "my-bucket" {
+		t.Errorf("s3_bucket = %v, want my-bucket", gotCfg["s3_bucket"])
+	}
+}
+
+func TestHandleBackupConfigUpdate_S3WithoutMasterPassword(t *testing.T) {
+	a, _ := newBackupTestApp(t)
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := strings.NewReader(`{"enabled":true,"target_type":"s3","s3_endpoint":"https://s3.example.com","s3_bucket":"my-bucket","s3_region":"us-east-1","s3_access_key":"AKIAEXAMPLE","s3_secret_key":"secret","s3_path_prefix":"backups"}`)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/config", body)
 	c.Set("app", a)
 
@@ -681,5 +762,116 @@ func TestMasterPasswordError(t *testing.T) {
 	}
 	if action["target"] != "master_password" {
 		t.Errorf("action.target = %v, want master_password", action["target"])
+	}
+}
+
+func TestHandleBackupCreate_VerifiesSHA256(t *testing.T) {
+	a, backupDir := newBackupTestApp(t)
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/create", nil)
+	c.Set("app", a)
+
+	BackupCreate(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response not JSON: %v", err)
+	}
+	if got["success"] != true {
+		t.Fatalf("success = %v, want true: %+v", got["success"], got)
+	}
+
+	manifestPath := filepath.Join(backupDir, "manifest.json")
+	manifestData, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+
+	var manifest struct {
+		Backups []struct {
+			Sha256 string `json:"sha256"`
+		} `json:"backups"`
+	}
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
+
+	if len(manifest.Backups) == 0 {
+		t.Fatal("manifest has no backup entries")
+	}
+	if manifest.Backups[0].Sha256 == "" {
+		t.Error("manifest sha256 field is empty")
+	}
+}
+
+func TestHandleBackupCreate_FailOnSHA256Mismatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	backupDir := filepath.Join(tmpDir, "backups")
+
+	sqlite := storage.NewSqliteManager().Init(dbPath)
+	if err := sqlite.Open(); err != nil {
+		t.Fatalf("sqlite open: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlite.Close() })
+	if err := sqlite.Migrate(); err != nil {
+		t.Fatalf("sqlite migrate: %v", err)
+	}
+
+	sm, err := settings.NewFromSqliteManager(sqlite, dbPath)
+	if err != nil {
+		t.Fatalf("settings: %v", err)
+	}
+
+	cfg := domain.NewDefaultBackupConfig()
+	cfg.Enabled = true
+	cfg.TargetType = domain.BackupTargetLocal
+	cfg.LocalPath = backupDir
+	if err := sm.UpdateBackupConfigFromJSON(backupConfigToJSON(cfg)); err != nil {
+		t.Fatalf("update backup config: %v", err)
+	}
+
+	fake := backup.NewFakeLocalAdapter(backupDir)
+	fake.SetRestoreData([]byte("different-bytes-than-vacuum-output"))
+
+	bm := backup.NewManagerWithAdapter(sqlite, dbPath, backupDir, fake)
+	a := app.NewApp(
+		domain.NewClockManager(domain.NewDefaultClockTaskConfig()),
+		sm,
+		sqlite,
+		bm,
+		dbPath,
+	)
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/backup/create", nil)
+	c.Set("app", a)
+
+	BackupCreate(c)
+
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response not JSON: %v", err)
+	}
+	if got["success"] != false {
+		t.Errorf("success = %v, want false", got["success"])
+	}
+	errStr, _ := got["error"].(string)
+	if !strings.Contains(errStr, "sha256") {
+		t.Errorf("error should mention sha256, got: %q", errStr)
+	}
+
+	if n := fake.DeletedNames(); len(n) != 1 {
+		t.Errorf("Delete calls = %d, want 1 (best-effort cleanup of corrupted backup)", len(n))
+	} else if !strings.HasPrefix(n[0], "presets_backup_") {
+		t.Errorf("deleted name = %q, want presets_backup_* prefix", n[0])
 	}
 }

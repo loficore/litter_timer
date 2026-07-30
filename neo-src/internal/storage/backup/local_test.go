@@ -29,6 +29,7 @@ package backup
 // underneath, which is what we're really guarding.
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -37,6 +38,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"little-timer/internal/storage"
 )
 
 // -----------------------------------------------------------------------------
@@ -622,5 +625,302 @@ func TestRetentionSkipsCorruptFiles(t *testing.T) {
 	}
 	if !have["presets_backup_NOTANUMBER.db"] || !have["presets_backup_also_bad.db"] {
 		t.Errorf("corrupt files should be left untouched; have %v", have)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// CreateBackup integration tests (VACUUM INTO, SHA256, manifest, cleanup)
+// -----------------------------------------------------------------------------
+
+// newRealManager creates a BackupManager backed by a real SqliteManager
+// for tests that exercise VACUUM INTO (which requires a live SQLite
+// connection).
+func newRealManager(t *testing.T) (*BackupManager, string, *storage.SqliteManager) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	backupDir := filepath.Join(tmpDir, "backups")
+
+	sqlite := storage.NewSqliteManager().Init(dbPath)
+	if err := sqlite.Open(); err != nil {
+		t.Fatalf("sqlite open: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlite.Close() })
+	if err := sqlite.Migrate(); err != nil {
+		t.Fatalf("sqlite migrate: %v", err)
+	}
+
+	// Insert a row so the backup has real content.
+	if _, err := sqlite.DB().Exec(`CREATE TABLE IF NOT EXISTS test_items (id INTEGER PRIMARY KEY, val TEXT);`); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	if _, err := sqlite.DB().Exec(`INSERT INTO test_items (val) VALUES ('hello-vacuum');`); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	mgr, err := NewLocal(sqlite, dbPath, backupDir)
+	if err != nil {
+		t.Fatalf("NewLocal: %v", err)
+	}
+	return mgr, backupDir, sqlite
+}
+
+// TestCreateBackup_VacuumInto exercises VACUUM INTO by creating a real
+// SQLite database, inserting a row, and calling CreateBackup.  Asserts
+// the backup file exists, the temp file is gone, and manifest.json was
+// written.
+func TestCreateBackup_VacuumInto(t *testing.T) {
+	mgr, backupDir, _ := newRealManager(t)
+
+	name, err := mgr.CreateBackup()
+	if err != nil {
+		t.Fatalf("CreateBackup: %v", err)
+	}
+	if name == "" {
+		t.Fatal("CreateBackup returned empty name")
+	}
+
+	// Backup file must exist in backupDir.
+	backupPath := filepath.Join(backupDir, name)
+	if _, err := os.Stat(backupPath); err != nil {
+		t.Fatalf("expected backup file at %s: %v", backupPath, err)
+	}
+
+	// Temp file `lt_backup_*.db` must be gone (defer os.Remove).
+	ltGlob := filepath.Join(filepath.Dir(mgr.dbPath), "lt_backup_*.db")
+	matches, err := filepath.Glob(ltGlob)
+	if err != nil {
+		t.Fatalf("glob: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Errorf("temp file(s) still present: %v", matches)
+	}
+
+	// manifest.json must exist in backupDir.
+	manifestPath := filepath.Join(backupDir, "manifest.json")
+	if _, err := os.Stat(manifestPath); err != nil {
+		t.Fatalf("expected manifest.json at %s: %v", manifestPath, err)
+	}
+}
+
+// TestCreateBackup_SHA256Match verifies the SHA-256 in manifest.json
+// matches an independently computed digest of the backup file.
+func TestCreateBackup_SHA256Match(t *testing.T) {
+	mgr, backupDir, _ := newRealManager(t)
+
+	name, err := mgr.CreateBackup()
+	if err != nil {
+		t.Fatalf("CreateBackup: %v", err)
+	}
+
+	// Read manifest.json and extract the sha256 field.
+	manifestPath := filepath.Join(backupDir, "manifest.json")
+	manifestData, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+
+	var manifest struct {
+		Version int `json:"version"`
+		Backups []struct {
+			Name      string `json:"name"`
+			Timestamp int64  `json:"timestamp"`
+			SizeBytes uint64 `json:"size_bytes"`
+			SHA256    string `json:"sha256"`
+		} `json:"backups"`
+	}
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
+
+	// Find the entry for our backup name.
+	var entrySHA256 string
+	for _, b := range manifest.Backups {
+		if b.Name == name {
+			entrySHA256 = b.SHA256
+			break
+		}
+	}
+	if entrySHA256 == "" {
+		t.Fatalf("manifest has no entry for backup %q", name)
+	}
+
+	// Independently compute SHA-256 of the backup file.
+	backupPath := filepath.Join(backupDir, name)
+	computed, err := sha256File(backupPath)
+	if err != nil {
+		t.Fatalf("sha256File: %v", err)
+	}
+
+	if entrySHA256 != computed {
+		t.Errorf("SHA-256 mismatch:\n manifest: %s\ncomputed: %s", entrySHA256, computed)
+	}
+}
+
+// TestCreateBackup_SingleQuotePath is the regression test for the
+// VACUUM INTO single-quote escaping fix: the temp file lives next to
+// the DB, so a dbPath inside a directory whose name contains a single
+// quote (e.g. `O'Brien`) previously produced broken SQL and a failed
+// backup.  SQLite has no bind-parameter support for VACUUM INTO, so the
+// path must be escaped by doubling the quote.
+func TestCreateBackup_SingleQuotePath(t *testing.T) {
+	quoteDir := filepath.Join(t.TempDir(), "O'Brien")
+	if err := os.MkdirAll(quoteDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll %s: %v", quoteDir, err)
+	}
+	dbPath := filepath.Join(quoteDir, "test.db")
+	backupDir := filepath.Join(quoteDir, "backups")
+
+	sqlite := storage.NewSqliteManager().Init(dbPath)
+	if err := sqlite.Open(); err != nil {
+		t.Fatalf("sqlite open: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlite.Close() })
+	if err := sqlite.Migrate(); err != nil {
+		t.Fatalf("sqlite migrate: %v", err)
+	}
+	if _, err := sqlite.DB().Exec(`CREATE TABLE IF NOT EXISTS test_items (id INTEGER PRIMARY KEY, val TEXT);`); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	if _, err := sqlite.DB().Exec(`INSERT INTO test_items (val) VALUES ('single-quote-path');`); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	mgr, err := NewLocal(sqlite, dbPath, backupDir)
+	if err != nil {
+		t.Fatalf("NewLocal: %v", err)
+	}
+
+	name, err := mgr.CreateBackup()
+	if err != nil {
+		t.Fatalf("CreateBackup in O'Brien dir: %v", err)
+	}
+	if name == "" {
+		t.Fatal("CreateBackup returned empty name")
+	}
+
+	// Backup file must exist in backupDir.
+	if _, err := os.Stat(filepath.Join(backupDir, name)); err != nil {
+		t.Fatalf("expected backup file at %s: %v", filepath.Join(backupDir, name), err)
+	}
+
+	// manifest.json must exist in backupDir.
+	if _, err := os.Stat(filepath.Join(backupDir, "manifest.json")); err != nil {
+		t.Fatalf("expected manifest.json at %s: %v", filepath.Join(backupDir, "manifest.json"), err)
+	}
+
+	// Temp file `lt_backup_*.db` must be gone (defer os.Remove).
+	matches, err := filepath.Glob(filepath.Join(quoteDir, "lt_backup_*.db"))
+	if err != nil {
+		t.Fatalf("glob: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Errorf("temp file(s) still present: %v", matches)
+	}
+}
+
+// TestCreateBackup_TempCleanup verifies that even when the adapter's
+// Backup() fails, the temp file is cleaned up (defer os.Remove).
+func TestCreateBackup_TempCleanup(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	backupDir := filepath.Join(tmpDir, "backups")
+
+	sqlite := storage.NewSqliteManager().Init(dbPath)
+	if err := sqlite.Open(); err != nil {
+		t.Fatalf("sqlite open: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlite.Close() })
+	if err := sqlite.Migrate(); err != nil {
+		t.Fatalf("sqlite migrate: %v", err)
+	}
+	if _, err := sqlite.DB().Exec(`CREATE TABLE IF NOT EXISTS test_items (id INTEGER PRIMARY KEY, val TEXT);`); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	if _, err := sqlite.DB().Exec(`INSERT INTO test_items (val) VALUES ('temp-cleanup');`); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	fake := NewFakeLocalAdapter(backupDir)
+	fake.SetBackupError(errors.New("injected backup failure"))
+
+	mgr := NewManagerWithAdapter(sqlite, dbPath, backupDir, fake)
+
+	_, err := mgr.CreateBackup()
+	if err == nil {
+		t.Fatal("CreateBackup should fail with injected error")
+	}
+
+	// Temp file `lt_backup_*.db` must be gone (defer os.Remove in CreateBackup).
+	ltGlob := filepath.Join(filepath.Dir(dbPath), "lt_backup_*.db")
+	matches, err := filepath.Glob(ltGlob)
+	if err != nil {
+		t.Fatalf("glob: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Errorf("temp file(s) leaked after failed backup: %v", matches)
+	}
+}
+
+// TestCreateBackup_ManifestWritten verifies the structure of manifest.json
+// after CreateBackup: version, backups array with name/timestamp/sha256/size_bytes.
+func TestCreateBackup_ManifestWritten(t *testing.T) {
+	mgr, backupDir, _ := newRealManager(t)
+
+	name, err := mgr.CreateBackup()
+	if err != nil {
+		t.Fatalf("CreateBackup: %v", err)
+	}
+
+	manifestPath := filepath.Join(backupDir, "manifest.json")
+	manifestData, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+
+	var manifest struct {
+		Version   int    `json:"version"`
+		DBVersion string `json:"db_version"`
+		Backups   []struct {
+			Name      string `json:"name"`
+			Timestamp int64  `json:"timestamp"`
+			SHA256    string `json:"sha256"`
+			SizeBytes uint64 `json:"size_bytes"`
+		} `json:"backups"`
+	}
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
+
+	if manifest.Version != 1 {
+		t.Errorf("version = %d, want 1", manifest.Version)
+	}
+
+	if len(manifest.Backups) == 0 {
+		t.Fatal("manifest has no backups")
+	}
+
+	// Find the entry for our backup.
+	var found bool
+	for _, b := range manifest.Backups {
+		if b.Name == name {
+			found = true
+			if b.Name == "" {
+				t.Error("backup name is empty")
+			}
+			if b.Timestamp == 0 {
+				t.Error("backup timestamp is zero")
+			}
+			if b.SHA256 == "" {
+				t.Error("backup sha256 is empty")
+			}
+			if b.SizeBytes == 0 {
+				t.Error("backup size_bytes is zero")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Errorf("manifest has no entry for backup %q", name)
 	}
 }
