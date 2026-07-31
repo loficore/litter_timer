@@ -31,6 +31,7 @@ import (
 
 	"little-timer/internal/domain"
 	"little-timer/internal/http/app"
+	"little-timer/internal/log"
 )
 
 // -----------------------------------------------------------------------------
@@ -122,6 +123,12 @@ func BackupConfigUpdate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+	// Config is persisted; rebuild the manager from it.  A rebuild
+	// failure must not fail the request — the config is saved, the
+	// manager will be rebuilt on the next config change or boot.
+	if err := a.RebuildBackup(c.Request.Context()); err != nil {
+		log.Error("BackupConfigUpdate: rebuild failed", "error", err.Error())
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -134,7 +141,8 @@ func BackupConfigUpdate(c *gin.Context) {
 // with a 503-ish error.
 func BackupCreate(c *gin.Context) {
 	a := appFromCtx(c)
-	if a.Backup == nil {
+	bm := a.BackupManager()
+	if bm == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "backup not configured"})
 		return
 	}
@@ -165,7 +173,7 @@ func BackupCreate(c *gin.Context) {
 		}
 	}
 
-	name, err := a.Backup.CreateBackup()
+	name, err := bm.CreateBackup()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
@@ -180,7 +188,8 @@ func BackupCreate(c *gin.Context) {
 // handleBackupRestore mirrors `handleBackupRestore`.  Body: {name}.
 func BackupRestore(c *gin.Context) {
 	a := appFromCtx(c)
-	if a.Backup == nil {
+	bm := a.BackupManager()
+	if bm == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "backup not configured"})
 		return
 	}
@@ -213,7 +222,7 @@ func BackupRestore(c *gin.Context) {
 			return
 		}
 	}
-	if err := a.Backup.RestoreFromBackup(req.Name); err != nil {
+	if err := bm.RestoreFromBackup(req.Name); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
@@ -224,7 +233,8 @@ func BackupRestore(c *gin.Context) {
 // `POST /api/backup/restore/:name`.
 func BackupRestoreByName(c *gin.Context) {
 	a := appFromCtx(c)
-	if a.Backup == nil {
+	bm := a.BackupManager()
+	if bm == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "backup not configured"})
 		return
 	}
@@ -233,7 +243,7 @@ func BackupRestoreByName(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "invalid backup name"})
 		return
 	}
-	if err := a.Backup.RestoreFromBackup(name); err != nil {
+	if err := bm.RestoreFromBackup(name); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
@@ -247,11 +257,12 @@ func BackupRestoreByName(c *gin.Context) {
 // handleBackupList mirrors `handleBackupList`.
 func BackupList(c *gin.Context) {
 	a := appFromCtx(c)
-	if a.Backup == nil {
+	bm := a.BackupManager()
+	if bm == nil {
 		c.JSON(http.StatusOK, gin.H{"success": true, "backups": []any{}})
 		return
 	}
-	items, err := a.Backup.ListBackups()
+	items, err := bm.ListBackups()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": true, "backups": []any{}})
 		return
@@ -266,7 +277,8 @@ func BackupList(c *gin.Context) {
 // handleBackupInfo mirrors `handleBackupInfo`.
 func BackupInfo(c *gin.Context) {
 	a := appFromCtx(c)
-	if a.Backup == nil {
+	bm := a.BackupManager()
+	if bm == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"info": gin.H{
@@ -278,7 +290,7 @@ func BackupInfo(c *gin.Context) {
 		})
 		return
 	}
-	summary, err := a.Backup.Summary()
+	summary, err := bm.Summary()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
@@ -296,7 +308,8 @@ func BackupInfo(c *gin.Context) {
 // handleBackupDeleteByName mirrors `handleBackupDeleteByName`.
 func BackupDeleteByName(c *gin.Context) {
 	a := appFromCtx(c)
-	if a.Backup == nil {
+	bm := a.BackupManager()
+	if bm == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "backup not configured"})
 		return
 	}
@@ -305,7 +318,7 @@ func BackupDeleteByName(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "invalid backup name"})
 		return
 	}
-	if err := a.Backup.DeleteBackup(name); err != nil {
+	if err := bm.DeleteBackup(name); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
@@ -317,7 +330,8 @@ func BackupDeleteByName(c *gin.Context) {
 // backup name when there's no `/delete/` segment).
 func BackupDelete(c *gin.Context) {
 	a := appFromCtx(c)
-	if a.Backup == nil {
+	bm := a.BackupManager()
+	if bm == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "backup not configured"})
 		return
 	}
@@ -326,7 +340,7 @@ func BackupDelete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "invalid backup name"})
 		return
 	}
-	if err := a.Backup.DeleteBackup(name); err != nil {
+	if err := bm.DeleteBackup(name); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
@@ -342,7 +356,8 @@ func BackupDelete(c *gin.Context) {
 // verifies the target dir is reachable).
 func BackupVerify(c *gin.Context) {
 	a := appFromCtx(c)
-	if a.Backup == nil {
+	bm := a.BackupManager()
+	if bm == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "backup not configured"})
 		return
 	}
@@ -350,7 +365,7 @@ func BackupVerify(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "error": "backup not enabled"})
 		return
 	}
-	if err := a.Backup.TestConnection(); err != nil {
+	if err := bm.TestConnection(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}

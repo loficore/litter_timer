@@ -43,7 +43,12 @@ fi
 
 # Step 2: Copy runtime.js to Android assets (Wails runtime needed)
 mkdir -p android/app/src/main/assets/wails
-cp ~/.asdf/installs/golang/*/packages/pkg/mod/github.com/wailsapp/wails/v3@*/internal/assetserver/bundledassets/runtime.js android/app/src/main/assets/wails/runtime.js 2>/dev/null || echo "Warning: runtime.js not found at expected path"
+WAILS_MOD_DIR="$(cd "$PROJECT_ROOT/neo-src" && go list -m -f '{{.Dir}}' github.com/wailsapp/wails/v3)"
+if [ -z "$WAILS_MOD_DIR" ] || [ ! -f "$WAILS_MOD_DIR/internal/assetserver/bundledassets/runtime.js" ]; then
+    echo "Error: could not resolve Wails v3 runtime.js ('go list -m' failed or file missing, module dir: ${WAILS_MOD_DIR:-<empty>})" >&2
+    exit 1
+fi
+cp "$WAILS_MOD_DIR/internal/assetserver/bundledassets/runtime.js" android/app/src/main/assets/wails/runtime.js
 
 # Step 3: Go → Android .so
 NDK_ROOT="${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk/26.3.11579264}"

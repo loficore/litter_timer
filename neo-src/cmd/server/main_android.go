@@ -29,17 +29,17 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
-	httpapp "little-timer/internal/http/app"
 	"little-timer/internal/domain"
+	httpapp "little-timer/internal/http/app"
 	"little-timer/internal/settings"
 	"little-timer/internal/storage"
-	"little-timer/internal/storage/backup"
 )
 
 //go:embed all:assets
@@ -65,8 +65,7 @@ func bootWails() {
 	fmt.Fprintf(os.Stderr, "[bootWails] StoragePath=%q\n", storagePath)
 
 	dbPath := filepath.Join(storagePath, "little_timer.db")
-	backupDir := filepath.Join(storagePath, "backups")
-	fmt.Fprintf(os.Stderr, "[bootWails] dbPath=%q backupDir=%q\n", dbPath, backupDir)
+	fmt.Fprintf(os.Stderr, "[bootWails] dbPath=%q backupDir=%q\n", dbPath, filepath.Join(storagePath, "backups"))
 
 	sqlite := storage.NewSqliteManager().Init(dbPath)
 	fmt.Fprintf(os.Stderr, "[bootWails] sqlite manager created\n")
@@ -89,15 +88,15 @@ func bootWails() {
 	clk := domain.NewClockManager(sm.BuildClockConfig())
 	fmt.Fprintf(os.Stderr, "[bootWails] clock created\n")
 
-	bm, berr := backup.NewLocal(sqlite, dbPath, backupDir)
-	if berr != nil {
-		fmt.Fprintf(os.Stderr, "[bootWails] backup disabled: %v\n", berr)
-		bm = nil
+	// RebuildBackup derives the backup dir from dbPath (`<storage>/backups`)
+	// and honours the persisted BackupConfig, falling back to local on failure.
+	a := httpapp.NewApp(clk, sm, sqlite, nil, dbPath)
+	if err := a.RebuildBackup(context.Background()); err != nil {
+		fmt.Fprintf(os.Stderr, "[bootWails] backup disabled: %v\n", err)
 	}
 
-	a := httpapp.NewApp(clk, sm, sqlite, bm, dbPath)
 	fmt.Fprintf(os.Stderr, "[bootWails] app created a=%p sqlite=%p sm=%p clk=%p bm=%p\n",
-		a, sqlite, sm, clk, bm)
+		a, sqlite, sm, clk, a.BackupManager())
 
 	wailsApp = application.New(application.Options{
 		Services: []application.Service{

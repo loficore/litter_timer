@@ -35,7 +35,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -45,7 +44,6 @@ import (
 	httpapp "little-timer/internal/http/app"
 	"little-timer/internal/settings"
 	"little-timer/internal/storage"
-	"little-timer/internal/storage/backup"
 	"little-timer/internal/webview"
 )
 
@@ -179,16 +177,13 @@ func bootstrapApp(dbPath string) (*httpapp.App, func(), error) {
 
 	clk := domain.NewClockManager(sm.BuildClockConfig())
 
-	// Backup is optional — try a Local adapter rooted next to the DB
-	// file, but don't fail the boot if the dir can't be created.
-	// (The Zig source's `MainApplication.init` is similarly lenient.)
-	bm, berr := backup.NewLocal(sqlite, dbPath, defaultBackupDir(dbPath))
-	if berr != nil {
-		fmt.Fprintf(os.Stderr, "warning: backup disabled (%v)\n", berr)
-		bm = nil
+	// Backup is optional — rebuild from the persisted BackupConfig;
+	// RebuildBackup falls back to a local adapter, and only returns an
+	// error when that also fails (backup disabled for this process).
+	a := httpapp.NewApp(clk, sm, sqlite, nil, dbPath)
+	if err := a.RebuildBackup(context.Background()); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: backup disabled (%v)\n", err)
 	}
-
-	a := httpapp.NewApp(clk, sm, sqlite, bm, dbPath)
 
 	cleanup := func() {
 		clk.Deinit()
@@ -197,17 +192,4 @@ func bootstrapApp(dbPath string) (*httpapp.App, func(), error) {
 		}
 	}
 	return a, cleanup, nil
-}
-
-// defaultBackupDir returns a sibling-of-DB backup directory.  Matches
-// the Zig source's per-platform behaviour (`./backups/` next to the DB).
-func defaultBackupDir(dbPath string) string {
-	dir := filepath.Dir(dbPath)
-	if dir == "" || dir == "." {
-		// ponytail: bare-filename DB → put backups in cwd.  Reachable
-		// only when the user passes a relative path without a parent
-		// component, which the CLI's default `little_timer.db` does.
-		return "backups"
-	}
-	return filepath.Join(dir, "backups")
 }

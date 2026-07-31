@@ -18,9 +18,11 @@
 package app
 
 import (
+	"context"
 	"time"
 
 	"little-timer/internal/domain"
+	"little-timer/internal/log"
 	"little-timer/internal/storage"
 )
 
@@ -551,20 +553,27 @@ func (s *BackupService) UpdateBackupConfig(json string) (any, error) {
 	if err := s.app.Settings.UpdateBackupConfigFromJSON(json); err != nil {
 		return map[string]any{"success": false, "error": err.Error()}, nil
 	}
+	// Config is persisted; rebuild the manager from it.  A rebuild
+	// failure must not fail the call — the config is saved, the
+	// manager will be rebuilt on the next config change or boot.
+	if err := s.app.RebuildBackup(context.Background()); err != nil {
+		log.Error("UpdateBackupConfig: rebuild failed", "error", err.Error())
+	}
 	return map[string]any{"success": true}, nil
 }
 
 // CreateBackup mirrors handleBackupCreate.
 func (s *BackupService) CreateBackup() (any, error) {
 	a := s.app
-	if a.Backup == nil {
+	bm := a.BackupManager()
+	if bm == nil {
 		return map[string]any{"success": false, "error": "backup not configured"}, nil
 	}
 	cfg := a.Settings.BackupConfig()
 	if !cfg.Enabled {
 		return map[string]any{"success": false, "error": "backup not enabled"}, nil
 	}
-	name, err := a.Backup.CreateBackup()
+	name, err := bm.CreateBackup()
 	if err != nil {
 		return map[string]any{"success": false, "error": err.Error()}, nil
 	}
@@ -574,10 +583,11 @@ func (s *BackupService) CreateBackup() (any, error) {
 // RestoreBackup mirrors handleBackupRestore.
 func (s *BackupService) RestoreBackup(name string) (any, error) {
 	a := s.app
-	if a.Backup == nil {
+	bm := a.BackupManager()
+	if bm == nil {
 		return map[string]any{"success": false, "error": "backup not configured"}, nil
 	}
-	if err := a.Backup.RestoreFromBackup(name); err != nil {
+	if err := bm.RestoreFromBackup(name); err != nil {
 		return map[string]any{"success": false, "error": err.Error()}, nil
 	}
 	return map[string]any{"success": true}, nil
@@ -588,10 +598,11 @@ func (s *BackupService) RestoreBackup(name string) (any, error) {
 // prefix).
 func (s *BackupService) DeleteBackup(name string) (any, error) {
 	a := s.app
-	if a.Backup == nil {
+	bm := a.BackupManager()
+	if bm == nil {
 		return map[string]any{"success": false, "error": "backup not configured"}, nil
 	}
-	if err := a.Backup.DeleteBackup(name); err != nil {
+	if err := bm.DeleteBackup(name); err != nil {
 		return map[string]any{"success": false, "error": err.Error()}, nil
 	}
 	return map[string]any{"success": true}, nil
@@ -601,13 +612,14 @@ func (s *BackupService) DeleteBackup(name string) (any, error) {
 // configured adapter's connection.
 func (s *BackupService) VerifyBackup() (any, error) {
 	a := s.app
-	if a.Backup == nil {
+	bm := a.BackupManager()
+	if bm == nil {
 		return map[string]any{"success": false, "error": "backup not configured"}, nil
 	}
 	if !a.Settings.BackupConfig().Enabled {
 		return map[string]any{"success": false, "error": "backup not enabled"}, nil
 	}
-	if err := a.Backup.TestConnection(); err != nil {
+	if err := bm.TestConnection(); err != nil {
 		return map[string]any{"success": false, "error": err.Error()}, nil
 	}
 	return map[string]any{"success": true}, nil
@@ -616,10 +628,11 @@ func (s *BackupService) VerifyBackup() (any, error) {
 // ListBackups mirrors handleBackupList.
 func (s *BackupService) ListBackups() (any, error) {
 	a := s.app
-	if a.Backup == nil {
+	bm := a.BackupManager()
+	if bm == nil {
 		return map[string]any{"success": true, "backups": []any{}}, nil
 	}
-	items, err := a.Backup.ListBackups()
+	items, err := bm.ListBackups()
 	if err != nil {
 		return map[string]any{"success": true, "backups": []any{}}, nil
 	}

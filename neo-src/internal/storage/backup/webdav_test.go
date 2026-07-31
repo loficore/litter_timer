@@ -13,6 +13,7 @@ package backup
 //   7. TestWebDAVWriteManifest — WriteManifest PUTs manifest.json; assert file exists
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -36,12 +37,23 @@ import (
 // Tests that need custom behavior (auth failures, specific PROPFIND
 // responses) should create their own server inline.
 func newWebDAVTestServer(t *testing.T) (*WebDAVAdapter, *httptest.Server, map[string][]byte) {
+	adapter, srv, store, _ := newWebDAVTestServerWithCL(t)
+	return adapter, srv, store
+}
+
+// newWebDAVTestServerWithCL is newWebDAVTestServer plus a map of the PUT
+// Content-Length values the server saw, keyed by request path.  Tests that
+// assert an explicit Content-Length (rather than chunked transfer encoding)
+// use this variant.
+func newWebDAVTestServerWithCL(t *testing.T) (*WebDAVAdapter, *httptest.Server, map[string][]byte, map[string]int64) {
 	t.Helper()
 	store := make(map[string][]byte)
+	putCL := make(map[string]int64)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		key := r.URL.Path
 		switch r.Method {
 		case http.MethodPut:
+			putCL[key] = r.ContentLength
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -74,7 +86,7 @@ func newWebDAVTestServer(t *testing.T) (*WebDAVAdapter, *httptest.Server, map[st
 		BasePath: "/backups",
 	})
 	adapter.client = srv.Client()
-	return adapter, srv, store
+	return adapter, srv, store, putCL
 }
 
 // -----------------------------------------------------------------------------
@@ -106,6 +118,48 @@ func TestWebDAVBackupRestoreRoundTrip(t *testing.T) {
 	}
 	if got := readBytes(t, dst); string(got) != string(payload) {
 		t.Errorf("restored content mismatch:\n got: %q\nwant: %q", got, payload)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Test 1b — medium/large file (>= 2 MiB) streaming round-trip
+// -----------------------------------------------------------------------------
+
+func TestWebDAVBackupRestoreRoundTrip_LargeFile(t *testing.T) {
+	adapter, _, store, putCL := newWebDAVTestServerWithCL(t)
+
+	// 2 MiB, deterministically patterned so a shift/truncation in either
+	// direction is caught byte-for-byte on both sides of the round-trip.
+	const size = 2 << 20
+	payload := make([]byte, size)
+	for i := range payload {
+		payload[i] = byte(i * 31)
+	}
+	src := filepath.Join(t.TempDir(), "src.db")
+	writeBytes(t, src, payload)
+
+	name := backupName(time.Now().Unix())
+	if err := adapter.Backup(src, name); err != nil {
+		t.Fatalf("Backup: %v", err)
+	}
+
+	key := "/backups/" + name
+	if gotStored := store[key]; !bytes.Equal(gotStored, payload) {
+		t.Fatalf("stored payload mismatch: got %d bytes, want %d", len(gotStored), size)
+	}
+	// The streaming path uses an *os.File request body; the client must set
+	// an explicit Content-Length (chunked transfer is rejected by many
+	// WebDAV servers).  A value of -1 means no Content-Length was sent.
+	if gotCL := putCL[key]; gotCL != int64(size) {
+		t.Errorf("PUT Content-Length: got %d, want %d", gotCL, size)
+	}
+
+	dst := filepath.Join(t.TempDir(), "restored.db")
+	if err := adapter.Restore(name, dst); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if got := readBytes(t, dst); !bytes.Equal(got, payload) {
+		t.Errorf("restored content mismatch: got %d bytes, want %d", len(got), size)
 	}
 }
 
@@ -510,5 +564,101 @@ func TestWebDAVRestoreNotFound(t *testing.T) {
 	}
 	if _, statErr := os.Stat(dst); !os.IsNotExist(statErr) {
 		t.Errorf("destination file should not exist after failed Restore (stat err: %v)", statErr)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Regression — default-style BasePath without a leading slash
+// -----------------------------------------------------------------------------
+
+// TestWebDAVBasePathWithSlash locks the URL normalization matrix of
+// basePathWithSlash + joinURL.  The settings default webdav_path_prefix is
+// "little_timer/" (no leading slash); without normalization it gets glued
+// onto the URL's last path segment (".../webdav" + "little_timer/" →
+// ".../webdavlittle_timer/"), breaking every WebDAV operation.
+func TestWebDAVBasePathWithSlash(t *testing.T) {
+	const base = "https://dav.example.test/remote.php/webdav"
+	tests := []struct {
+		name     string
+		basePath string
+		want     string
+	}{
+		{"empty basePath", "", base + "/backup-1.db"},
+		{"settings default (no leading slash)", "little_timer/", base + "/little_timer/backup-1.db"},
+		{"leading slash only", "/backups", base + "/backups/backup-1.db"},
+		{"both slashes", "/backups/", base + "/backups/backup-1.db"},
+		{"multi-segment without leading slash", "dav/lt/", base + "/dav/lt/backup-1.db"},
+		{"neither slash", "lt", base + "/lt/backup-1.db"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter := NewWebDAVAdapter(WebDAVConfig{URL: base, BasePath: tt.basePath})
+			got := adapter.joinURL(adapter.basePathWithSlash(), "backup-1.db")
+			if got != tt.want {
+				t.Errorf("joinURL(basePathWithSlash()): got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestWebDAVBackupRoundTrip_DefaultStylePrefix is the end-to-end guard for
+// the P0 bug: with BasePath "little_timer/" (the settings default) the PUT
+// must land at /little_timer/<name> on the server, not glued onto the host.
+func TestWebDAVBackupRoundTrip_DefaultStylePrefix(t *testing.T) {
+	store := make(map[string][]byte)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := r.URL.Path
+		switch r.Method {
+		case http.MethodPut:
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			store[key] = body
+			w.WriteHeader(http.StatusCreated)
+		case http.MethodGet:
+			data, ok := store[key]
+			if !ok {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.Write(data)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	defer srv.Close()
+
+	adapter := NewWebDAVAdapter(WebDAVConfig{
+		URL:      srv.URL,
+		BasePath: "little_timer/", // settings default webdav_path_prefix
+	})
+	adapter.client = srv.Client()
+
+	payload := []byte("SQLite-format-3\x00default-prefix-round-trip")
+	src := filepath.Join(t.TempDir(), "src.db")
+	writeBytes(t, src, payload)
+
+	name := backupName(time.Now().Unix())
+	if err := adapter.Backup(src, name); err != nil {
+		t.Fatalf("Backup: %v", err)
+	}
+
+	// The server must have received the PUT at the normalized path, and the
+	// map store key is r.URL.Path — a glued "davlittle_timer/<name>" path
+	// (or an invalid-port parse failure) fails this assertion.
+	key := "/little_timer/" + name
+	if got := store[key]; !bytes.Equal(got, payload) {
+		t.Errorf("stored payload at %q: got %q, want %q", key, got, payload)
+	}
+
+	dst := filepath.Join(t.TempDir(), "restored.db")
+	if err := adapter.Restore(name, dst); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if got := readBytes(t, dst); !bytes.Equal(got, payload) {
+		t.Errorf("restored content mismatch:\n got: %q\nwant: %q", got, payload)
 	}
 }

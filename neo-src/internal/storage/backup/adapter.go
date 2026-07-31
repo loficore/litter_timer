@@ -356,14 +356,32 @@ func (w *WebDAVAdapter) deleteProbe(probeURL string) error {
 }
 
 func (w *WebDAVAdapter) Backup(srcPath, backupName string) error {
-	body, err := os.ReadFile(srcPath)
+	f, err := os.Open(srcPath)
 	if err != nil {
-		return fmt.Errorf("%w: read src: %v", ErrBackupFailed, err)
+		return fmt.Errorf("%w: open src: %v", ErrBackupFailed, err)
 	}
+	defer f.Close()
+
+	stat, err := f.Stat()
+	if err != nil {
+		return fmt.Errorf("%w: stat src: %v", ErrBackupFailed, err)
+	}
+
 	url := w.joinURL(w.basePathWithSlash(), backupName)
-	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPut, url, f)
 	if err != nil {
 		return fmt.Errorf("%w: build PUT: %v", ErrBackupFailed, err)
+	}
+	req.ContentLength = stat.Size()
+	// GetBody must NOT share the request body's *os.File: the transport may
+	// call GetBody (307/308 redirect / retry) while writeLoop is still
+	// reading from the shared file, racing Read and Seek on one fd.  A fresh
+	// handle per call is race-free; the transport closes what GetBody returns.
+	req.GetBody = func() (io.ReadCloser, error) {
+		return os.Open(srcPath)
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("%w: rewind src: %v", ErrBackupFailed, err)
 	}
 	req.Header.Set("Content-Type", "application/octet-stream")
 	w.applyAuth(req)
@@ -415,8 +433,14 @@ func (w *WebDAVAdapter) Restore(backupName, destPath string) error {
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("%w: GET status %d", ErrRestoreFailed, resp.StatusCode)
 	}
-	if err := os.WriteFile(destPath, mustReadAll(resp.Body), 0o600); err != nil {
-		return fmt.Errorf("%w: write dest: %v", ErrRestoreFailed, err)
+	dst, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("%w: create dest: %v", ErrRestoreFailed, err)
+	}
+	defer dst.Close()
+	if _, err := io.Copy(dst, resp.Body); err != nil {
+		_ = os.Remove(destPath) // don't leave a partial file behind
+		return fmt.Errorf("%w: copy body: %v", ErrRestoreFailed, err)
 	}
 	return nil
 }
@@ -525,11 +549,19 @@ func parsePropfindResponse(r io.Reader) ([]BackupInfo, error) {
 	return out, nil
 }
 
-// basePathWithSlash returns BasePath normalised to end with "/".
+// basePathWithSlash returns BasePath normalised to a server-relative path
+// with both a leading and a trailing "/" (e.g. "little_timer/" →
+// "/little_timer/").  The leading slash is required: joinURL concatenates
+// basePath onto the URL's last path segment, so a missing leading slash
+// would glue the prefix onto it (".../dav" + "little_timer/" →
+// ".../davlittle_timer/").
 func (w *WebDAVAdapter) basePathWithSlash() string {
 	bp := w.cfg.BasePath
 	if bp == "" {
 		bp = "/"
+	}
+	if !strings.HasPrefix(bp, "/") {
+		bp = "/" + bp
 	}
 	if !strings.HasSuffix(bp, "/") {
 		bp += "/"
@@ -844,15 +876,6 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return out.Close()
-}
-
-// mustReadAll reads everything from r; errors propagate to the caller.
-func mustReadAll(r io.Reader) []byte {
-	b, err := io.ReadAll(r)
-	if err != nil {
-		return nil
-	}
-	return b
 }
 
 // timestampFromName extracts the unix-seconds field from

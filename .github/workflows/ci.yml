@@ -12,6 +12,8 @@ on:
       - "assets/pnpm-lock.yaml"
       - "neo-src/**"
       - "scripts/**"
+      - "android/**"
+      - "scripts/build-android.sh"
       - ".github/workflows/ci.yml"
       - ".github/workflows/vrt.yml"
   release:
@@ -184,6 +186,61 @@ jobs:
           name: playwright-report
           path: assets/playwright-report
           if-no-files-found: ignore
+
+  # Android 构建：PR/push 级别验证 APK 可构建（步骤与 release job 的 Android 段一致）
+  android-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.0"
+          cache-dependency-path: neo-src/go.sum
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+          cache-dependency-path: assets/pnpm-lock.yaml
+      - run: pnpm install
+        working-directory: assets
+      - name: Generate Wails bindings
+        run: bash scripts/generate-bindings.sh
+      - run: pnpm run build
+        working-directory: assets
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+      - name: Install Android NDK
+        run: |
+          sdkmanager "ndk;26.3.11579264"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> $GITHUB_ENV
+          ls $ANDROID_HOME/ndk/
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlite3-dev pkg-config
+      - name: Build Android APK
+        run: |
+          chmod +x scripts/build-android.sh
+          bash scripts/build-android.sh
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LittleTimer-apk
+          path: bin/LittleTimer.apk
+          if-no-files-found: error
 
   # 发布：同一工作流内等待所有检查完成
   release:

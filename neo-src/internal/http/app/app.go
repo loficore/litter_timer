@@ -16,6 +16,7 @@
 package app
 
 import (
+	"context"
 	"path/filepath"
 
 	"sync"
@@ -109,6 +110,75 @@ func (a *App) RLock() { a.mu.RLock() }
 
 // RUnlock 释放 App 的读锁。
 func (a *App) RUnlock() { a.mu.RUnlock() }
+
+// -----------------------------------------------------------------------------
+// Backup manager accessors.  The manager is rebuilt whenever the
+// persisted BackupConfig changes (target switch, creds rotation) —
+// there is no SetTarget mutator on BackupManager, mirroring the Zig
+// source.  Handlers and Wails services read the current manager through
+// BackupManager() (RLock snapshot) and call RebuildBackup (write lock)
+// when the config has changed.
+// -----------------------------------------------------------------------------
+
+// BackupManager returns the current BackupManager snapshot.  May be nil
+// when backup is not configured (handlers treat nil as "backup not
+// configured").
+func (a *App) BackupManager() *backup.BackupManager {
+	a.RLock()
+	defer a.RUnlock()
+	return a.Backup
+}
+
+// RebuildBackup reconstructs the BackupManager from the persisted
+// BackupConfig and swaps it in under the App write lock.  When
+// construction fails for a cloud target (webdav/s3), backup is
+// disabled for this process: the error is logged with the target
+// type, a.Backup is set to nil, and the error is returned — there is
+// NO silent fallback to local, because the UI/settings advertise a
+// cloud target and local backups would diverge from the configured
+// behavior.  For local targets only, a construction error is logged
+// and falls back to a local adapter rooted in the default backup dir;
+// only when that fallback also fails is a.Backup set to nil (backup
+// disabled for this process).
+func (a *App) RebuildBackup(ctx context.Context) error {
+	backupDir := defaultBackupDir(a.DBPath)
+	cfg := a.Settings.BackupConfig()
+	mgr, err := backup.NewFromConfig(ctx, a.SQLite, a.DBPath, backupDir, cfg)
+	if err != nil {
+		if cfg.TargetType == domain.BackupTargetWebDAV || cfg.TargetType == domain.BackupTargetS3 {
+			log.Error("RebuildBackup: NewFromConfig failed for cloud target, disabling backup", "target_type", cfg.TargetType.String(), "error", err.Error())
+			a.Lock()
+			a.Backup = nil
+			a.Unlock()
+			return err
+		}
+		log.Error("RebuildBackup: NewFromConfig failed, falling back to local", "error", err.Error())
+		mgr, err = backup.NewLocal(a.SQLite, a.DBPath, backupDir)
+		if err != nil {
+			log.Error("RebuildBackup: NewLocal fallback failed, disabling backup", "error", err.Error())
+			a.Lock()
+			a.Backup = nil
+			a.Unlock()
+			return err
+		}
+	}
+	a.Lock()
+	a.Backup = mgr
+	a.Unlock()
+	return nil
+}
+
+// defaultBackupDir returns a sibling-of-DB backup directory.  Ported
+// from `cmd/server/main.go`'s original defaultBackupDir (removed in
+// T3 once App owned the rule).
+// Bare-filename DB paths (Dir == "" or ".") resolve to `./backups`.
+func defaultBackupDir(dbPath string) string {
+	dir := filepath.Dir(dbPath)
+	if dir == "" || dir == "." {
+		return "backups"
+	}
+	return filepath.Join(dir, "backups")
+}
 
 // -----------------------------------------------------------------------------
 // Timer session helpers — mirrors `createTimerSession`, `finishTimerSession`,
