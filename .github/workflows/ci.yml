@@ -187,10 +187,43 @@ jobs:
           path: assets/playwright-report
           if-no-files-found: ignore
 
-  # Android 构建：PR/push 级别验证 APK 可构建（步骤与 release job 的 Android 段一致）
-  android-build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+  # 三平台 WebView 构建矩阵（取代原 android-build job）：
+  #   - linux   : 桌面 WebView 二进制 —— webview_go 硬编码 pkg-config gtk+-3.0+webkit2gtk-4.0，
+  #               但 ubuntu-latest(24.04) 只有 webkit2gtk-4.1：装 4.1 包 + pc shim 伪装成 4.0；
+  #               wails3 bindings CLI 需 GTK4+WebKitGTK-6.0（两套都要装）
+  #   - windows : 桌面 WebView 二进制 —— WebView2 无需 GTK；cgo 需 mingw gcc/g++
+  #               （webview_go 的 CXXFLAGS/LDFLAGS 是 gcc 风格，MSVC 不可用）
+  #   - android : APK —— scripts/build-android.sh 内部再跑 android bindings + NDK + Gradle
+  # 修复点：wails3 bindings CLI 在 Linux 上编译时要求 GTK4+WebKitGTK-6.0 dev 包；
+  # 原 android-build job 把 apt 安装放在 bindings 之后导致失败 —— 现移到 bindings 之前。
+  build:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-latest
+            timeout: 20
+            artifact: little-timer-linux
+            artifact-path: neo-src/bin/server
+          - name: windows
+            os: windows-latest
+            timeout: 25
+            artifact: little-timer-windows
+            artifact-path: neo-src/bin/server.exe
+          - name: android
+            os: ubuntu-latest
+            timeout: 60
+            artifact: LittleTimer-apk
+            artifact-path: bin/LittleTimer.apk
+    concurrency:
+      group: build-${{ github.ref }}-${{ matrix.name }}
+      cancel-in-progress: true
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
@@ -207,29 +240,79 @@ jobs:
           node-version: 22
           cache: "pnpm"
           cache-dependency-path: assets/pnpm-lock.yaml
+      - name: Install Linux build dependencies (GTK3+webkit2gtk-4.1 for webview_go via 4.0 pc shim, GTK4+webkitgtk-6.0 for wails3 CLI)
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libgtk-4-dev \
+            libwebkitgtk-6.0-dev \
+            pkg-config \
+            libgirepository1.0-dev \
+            libsqlite3-dev
+      - name: Create webkit2gtk-4.0 pkg-config shim (24.04 ships 4.1 only)
+        if: matrix.name == 'linux'
+        run: |
+          PC_DIR="/usr/lib/x86_64-linux-gnu/pkgconfig"
+          sudo cp "$PC_DIR/webkit2gtk-4.1.pc" "$PC_DIR/webkit2gtk-4.0.pc"
+          pkg-config --modversion webkit2gtk-4.0
+      - name: Install Android build dependencies (GTK4+webkitgtk-6.0 for wails3 CLI, sqlite for cgo)
+        if: matrix.name == 'android'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-4-dev \
+            libwebkitgtk-6.0-dev \
+            pkg-config \
+            libgirepository1.0-dev \
+            libsqlite3-dev
+      - name: Install mingw (CGO toolchain for webview_go)
+        if: matrix.name == 'windows'
+        run: |
+          choco install mingw -y
+          echo "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin" >> $GITHUB_PATH
+          echo "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\x86_64-w64-mingw32\bin" >> $GITHUB_PATH
+          gcc --version
+          g++ --version
       - run: pnpm install
         working-directory: assets
       - name: Generate Wails bindings
+        if: matrix.name != 'android'
         run: bash scripts/generate-bindings.sh
       - run: pnpm run build
+        if: matrix.name != 'android'
         working-directory: assets
+      - name: Copy built frontend into Go embed path
+        if: matrix.name != 'android'
+        run: cp assets/dist/index.html neo-src/cmd/server/assets/index.html
+      - name: Build desktop WebView server (linux)
+        if: matrix.name == 'linux'
+        run: go build -tags "webview,embed_ui" -o bin/server ./cmd/server
+        working-directory: neo-src
+      - name: Build desktop WebView server (windows)
+        if: matrix.name == 'windows'
+        run: go build -tags "webview,embed_ui" -o bin/server.exe ./cmd/server
+        working-directory: neo-src
       - name: Setup JDK 17
+        if: matrix.name == 'android'
         uses: actions/setup-java@v4
         with:
           java-version: "17"
           distribution: "temurin"
       - name: Setup Android SDK
+        if: matrix.name == 'android'
         uses: android-actions/setup-android@v4
       - name: Install Android NDK
+        if: matrix.name == 'android'
         run: |
           sdkmanager "ndk;26.3.11579264"
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> $GITHUB_ENV
           ls $ANDROID_HOME/ndk/
-      - run: |
-          sudo apt-get update
-          sudo apt-get install -y libsqlite3-dev pkg-config
       - name: Build Android APK
+        if: matrix.name == 'android'
         run: |
           chmod +x scripts/build-android.sh
           bash scripts/build-android.sh
@@ -238,8 +321,8 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
       - uses: actions/upload-artifact@v4
         with:
-          name: LittleTimer-apk
-          path: bin/LittleTimer.apk
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact-path }}
           if-no-files-found: error
 
   # 发布：同一工作流内等待所有检查完成
@@ -312,7 +395,12 @@ jobs:
 
       - run: |
           sudo apt-get update
-          sudo apt-get install -y libsqlite3-dev pkg-config
+          sudo apt-get install -y \
+            libgtk-4-dev \
+            libwebkitgtk-6.0-dev \
+            pkg-config \
+            libgirepository1.0-dev \
+            libsqlite3-dev
 
       - name: Make scripts executable
         run: chmod +x scripts/*.sh || true
