@@ -29,7 +29,6 @@ android/build/
 android/app/build/
 android/build/reports/
 android/app/src/main/jniLibs/
-android/app/src/main/res/mipmap-*/
 bin/*.apk
 build/android/
 

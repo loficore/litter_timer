@@ -12,10 +12,6 @@ import (
 	"github.com/webview/webview_go"
 )
 
-// appURL is supplied by url_dev.go or url_embed.go, both of which are
-// gated by the `webview` build tag.
-var appURL string
-
 func run() error {
 	w := webview.New(false)
 	if w == nil {
