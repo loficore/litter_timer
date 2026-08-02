@@ -175,8 +175,9 @@ export const useSettings = (): UseSettingsReturn => {
       const localAudio = loadAudioPreferences();
       
       const basic = (serverSettings?.basic ?? {}) as unknown as Record<string, unknown>;
-      const countdown = (serverSettings?.countdown ?? {}) as unknown as Record<string, unknown>;
-      const stopwatch = (serverSettings?.stopwatch ?? {}) as unknown as Record<string, unknown>;
+      const clockDefaults = (serverSettings?.clock_defaults ?? {}) as unknown as Record<string, unknown>;
+      const countdown = (clockDefaults.countdown ?? {}) as unknown as Record<string, unknown>;
+      const stopwatch = (clockDefaults.stopwatch ?? {}) as unknown as Record<string, unknown>;
 
       const audioPrefs = normalizeAudioPreferences({
         sound_enabled: (basic.sound_enabled as boolean) ?? localAudio.sound_enabled,

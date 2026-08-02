@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "preact/hooks";
 import type { FunctionalComponent } from "preact";
-import { APIClient } from "../utils/apiClient";
+import { getAPIClient } from "../utils/apiClientSingleton";
 import type { HabitSet, Habit } from "../types/habit";
 import { WallpaperSelector } from "./WallpaperSelector";
 import { PickerNumberInput } from "./PickerNumberInput";
@@ -127,7 +127,7 @@ export const HabitModal: FunctionalComponent<HabitModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const client = new APIClient(window.location.origin);
+      const client = getAPIClient();
       
       if (mode === "set") {
         if (isSetEdit) {
@@ -191,7 +191,7 @@ export const HabitModal: FunctionalComponent<HabitModalProps> = ({
   return (
     <div className="my-overlay-backdrop fixed inset-0 z-[60] flex items-center justify-center">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative my-surface-modal rounded-2xl p-6 sm:p-7 w-full max-w-lg mx-4">
+      <div className="relative my-surface-modal rounded-2xl p-6 sm:p-7 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         <h3 className="text-lg sm:text-xl font-bold mb-5 sm:mb-6">{getTitle()}</h3>
         
         <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6 sm:space-y-7">

@@ -138,7 +138,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
     try {
       const result = await apiClient.createBackup();
       if (result.success) {
-        showMessage('success', `Backup created: ${result.backup_path}`);
+        showMessage('success', t("backup.created_at", { path: result.backup_path }));
         await loadBackups();
       } else {
         if (!handleApiError(result)) {
@@ -154,7 +154,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
   };
 
   const handleRestoreBackup = async (name: string) => {
-    if (!confirm(`Restore from backup "${name}"? This will replace current data.`)) {
+    if (!confirm(t("backup.restore_confirm", { name }))) {
       return;
     }
     setIsRestoring(true);
@@ -162,35 +162,35 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
     try {
       const result = await apiClient.restoreBackup(name);
       if (result.success) {
-        showMessage('success', 'Backup restored successfully');
+        showMessage('success', t("backup.restore_success"));
       } else {
         if (!handleApiError(result)) {
-          showMessage('error', result.error || 'Failed to restore backup');
+          showMessage('error', result.error || t("backup.restore_failed"));
         }
       }
     } catch (err) {
       console.error('Failed to restore backup:', err);
-      showMessage('error', 'Failed to restore backup');
+      showMessage('error', t("backup.restore_failed"));
     } finally {
       setIsRestoring(false);
     }
   };
 
   const handleDeleteBackup = async (name: string) => {
-    if (!confirm(`Delete backup "${name}"? This cannot be undone.`)) {
+    if (!confirm(t("backup.delete_confirm", { name }))) {
       return;
     }
     try {
       const result = await apiClient.deleteBackup(name);
       if (result.success) {
-        showMessage('success', 'Backup deleted');
+        showMessage('success', t("backup.delete_success"));
         await loadBackups();
       } else {
-        showMessage('error', result.error || 'Failed to delete backup');
+        showMessage('error', result.error || t("backup.delete_failed"));
       }
     } catch (err) {
       console.error('Failed to delete backup:', err);
-      showMessage('error', 'Failed to delete backup');
+      showMessage('error', t("backup.delete_failed"));
     }
   };
 
@@ -200,13 +200,13 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
     try {
       const result = await apiClient.verifyBackup();
       if (result.success) {
-        showMessage('success', 'Backup location verified successfully');
+        showMessage('success', t("backup.verify_success"));
       } else {
-        showMessage('error', result.error || 'Backup verification failed');
+        showMessage('error', result.error || t("backup.verify_failed"));
       }
     } catch (err) {
       console.error('Failed to verify backup:', err);
-      showMessage('error', 'Failed to verify backup');
+      showMessage('error', t("backup.verify_failed"));
     } finally {
       setIsVerifying(false);
     }
@@ -265,7 +265,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
 
       <div className="form-control">
         <label className="label cursor-pointer">
-          <span className="label-text">启用自动备份</span>
+          <span className="label-text">{t("backup.auto_backup")}</span>
           <input
             type="checkbox"
             className="toggle toggle-primary"
@@ -277,16 +277,16 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
 
       <div className="form-control">
         <label className="label">
-          <span className="label-text">备份目标</span>
+          <span className="label-text">{t("backup.target_type")}</span>
         </label>
         <select
           className="select select-bordered w-full"
           value={backupConfig.target_type}
           onChange={(e) => handleConfigChange('target_type', e.currentTarget.value)}
         >
-          <option value="local">本地存储</option>
-          <option value="webdav">WebDAV</option>
-          <option value="s3">S3 兼容存储</option>
+          <option value="local">{t("backup.target_local")}</option>
+          <option value="webdav">{t("backup.target_webdav")}</option>
+          <option value="s3">{t("backup.target_s3")}</option>
         </select>
       </div>
 
@@ -339,7 +339,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
                           await loadMasterPasswordStatus();
                         }
                       } catch {
-                        showMessage('error', 'Failed to lock credentials');
+                        showMessage('error', t("backup.lock_failed"));
                       }
                     })();
                   } else {
@@ -361,7 +361,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
       {backupConfig.target_type === 'local' && (
         <div className="form-control">
           <label className="label">
-            <span className="label-text">本地路径</span>
+            <span className="label-text">{t("backup.local_path")}</span>
           </label>
           <input
             type="text"
@@ -377,7 +377,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
         <>
           <div className="form-control">
             <label className="label">
-              <span className="label-text">WebDAV URL</span>
+              <span className="label-text">{t("backup.webdav_url")}</span>
             </label>
             <input
               type="text"
@@ -389,7 +389,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
           </div>
           <div className="form-control">
             <label className="label">
-              <span className="label-text">用户名</span>
+              <span className="label-text">{t("backup.username")}</span>
             </label>
             <input
               type="text"
@@ -400,7 +400,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
           </div>
           <div className="form-control">
             <label className="label">
-              <span className="label-text">密码</span>
+              <span className="label-text">{t("backup.password")}</span>
             </label>
             <input
               type="password"
@@ -411,7 +411,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
           </div>
           <div className="form-control">
             <label className="label">
-              <span className="label-text">路径前缀</span>
+              <span className="label-text">{t("backup.path_prefix")}</span>
             </label>
             <input
               type="text"
@@ -428,7 +428,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
         <>
           <div className="form-control">
             <label className="label">
-              <span className="label-text">S3 Endpoint</span>
+              <span className="label-text">{t("backup.s3_endpoint")}</span>
             </label>
             <input
               type="text"
@@ -440,7 +440,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
           </div>
           <div className="form-control">
             <label className="label">
-              <span className="label-text">Bucket</span>
+              <span className="label-text">{t("backup.s3_bucket")}</span>
             </label>
             <input
               type="text"
@@ -452,7 +452,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
           </div>
           <div className="form-control">
             <label className="label">
-              <span className="label-text">Region</span>
+              <span className="label-text">{t("backup.s3_region")}</span>
             </label>
             <input
               type="text"
@@ -464,7 +464,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
           </div>
           <div className="form-control">
             <label className="label">
-              <span className="label-text">Access Key</span>
+              <span className="label-text">{t("backup.s3_access_key")}</span>
             </label>
             <input
               type="text"
@@ -475,7 +475,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
           </div>
           <div className="form-control">
             <label className="label">
-              <span className="label-text">Secret Key</span>
+              <span className="label-text">{t("backup.s3_secret_key")}</span>
             </label>
             <input
               type="password"
@@ -486,7 +486,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
           </div>
           <div className="form-control">
             <label className="label">
-              <span className="label-text">Path Prefix</span>
+              <span className="label-text">{t("backup.path_prefix")}</span>
             </label>
             <input
               type="text"
@@ -508,7 +508,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
           {isCreating ? (
             <span className="loading loading-spinner loading-sm" />
           ) : (
-            '立即备份'
+            t("backup.create_now")
           )}
         </button>
         <button
@@ -519,19 +519,19 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
           {isVerifying ? (
             <span className="loading loading-spinner loading-sm" />
           ) : (
-            '验证连接'
+            t("backup.verify_connection")
           )}
         </button>
       </div>
 
       <div className="mt-6">
-        <h3 className="text-md font-semibold mb-2">现有备份</h3>
+        <h3 className="text-md font-semibold mb-2">{t("backup.existing_backups")}</h3>
         {isLoading ? (
           <div className="flex justify-center py-4">
             <span className="loading loading-spinner loading-sm" />
           </div>
         ) : backups.length === 0 ? (
-          <p className="text-sm text-base-content/60">暂无备份</p>
+          <p className="text-sm text-base-content/60">{t("backup.no_backups")}</p>
         ) : (
           <div className="space-y-2">
             {backups.map((backup) => (
@@ -548,13 +548,13 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
                     onClick={() => { void handleRestoreBackup(backup.name); }}
                     disabled={isRestoring}
                   >
-                    恢复
+                    {t("backup.restore")}
                   </button>
                   <button
                     className="btn btn-sm btn-ghost text-error"
                     onClick={() => { void handleDeleteBackup(backup.name); }}
                   >
-                    删除
+                    {t("backup.delete")}
                   </button>
                 </div>
               </div>
@@ -576,3 +576,4 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
     </div>
   );
 };
+

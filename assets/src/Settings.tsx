@@ -189,14 +189,14 @@ export const SettingsPage: FunctionalComponent<SettingsPageProps> = ({
           light_style: localLightStyle,
         },
         clock_defaults: {
-          countdown: s?.countdown ? {
-            duration_seconds: s.countdown?.duration_seconds ?? 1500,
-            loop: s.countdown?.loop ?? false,
-            loop_count: s.countdown?.loop_count ?? 0,
-            loop_interval_seconds: s.countdown?.loop_interval_seconds ?? 0,
+          countdown: s?.clock_defaults?.countdown ? {
+            duration_seconds: s.clock_defaults.countdown?.duration_seconds ?? 1500,
+            loop: s.clock_defaults.countdown?.loop ?? false,
+            loop_count: s.clock_defaults.countdown?.loop_count ?? 0,
+            loop_interval_seconds: s.clock_defaults.countdown?.loop_interval_seconds ?? 0,
           } : DEFAULT_CONFIG.clock_defaults.countdown,
-          stopwatch: s?.stopwatch ? {
-            max_seconds: s.stopwatch?.max_seconds ?? 86400,
+          stopwatch: s?.clock_defaults?.stopwatch ? {
+            max_seconds: s.clock_defaults.stopwatch?.max_seconds ?? 86400,
           } : DEFAULT_CONFIG.clock_defaults.stopwatch,
         },
       };

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/preact";
 import { BackupTab } from "../../../components/settings/BackupTab";
+import { t } from "../../../utils/i18n";
 
 vi.mock("../../../utils/apiClientSingleton", () => ({
   getAPIClient: vi.fn(),
@@ -59,7 +60,7 @@ describe("BackupTab", () => {
     render(<BackupTab config={{}} onChange={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText("暂无备份")).toBeTruthy();
+      expect(screen.getByText(t("backup.no_backups"))).toBeTruthy();
     });
   });
 
@@ -121,9 +122,9 @@ describe("BackupTab", () => {
     fireEvent.change(select, { target: { value: "webdav" } });
 
     await waitFor(() => {
-      expect(screen.getByText("WebDAV URL")).toBeTruthy();
-      expect(screen.getByText("用户名")).toBeTruthy();
-      expect(screen.getByText("密码")).toBeTruthy();
+      expect(screen.getByText(t("backup.webdav_url"))).toBeTruthy();
+      expect(screen.getByText(t("backup.username"))).toBeTruthy();
+      expect(screen.getByText(t("backup.password"))).toBeTruthy();
     });
   });
 
@@ -141,11 +142,11 @@ describe("BackupTab", () => {
     fireEvent.change(select, { target: { value: "s3" } });
 
     await waitFor(() => {
-      expect(screen.getByText("S3 Endpoint")).toBeTruthy();
-      expect(screen.getByText("Bucket")).toBeTruthy();
-      expect(screen.getByText("Region")).toBeTruthy();
-      expect(screen.getByText("Access Key")).toBeTruthy();
-      expect(screen.getByText("Secret Key")).toBeTruthy();
+      expect(screen.getByText(t("backup.s3_endpoint"))).toBeTruthy();
+      expect(screen.getByText(t("backup.s3_bucket"))).toBeTruthy();
+      expect(screen.getByText(t("backup.s3_region"))).toBeTruthy();
+      expect(screen.getByText(t("backup.s3_access_key"))).toBeTruthy();
+      expect(screen.getByText(t("backup.s3_secret_key"))).toBeTruthy();
     });
   });
 
@@ -162,11 +163,11 @@ describe("BackupTab", () => {
       expect(screen.getByText("备份")).toBeTruthy();
     });
 
-    const createButton = screen.getByText("立即备份");
+    const createButton = screen.getByText(t("backup.create_now"));
     fireEvent.click(createButton);
 
     await waitFor(() => {
-      expect(screen.getByText("Backup created: /tmp/backup.db")).toBeTruthy();
+      expect(screen.getByText(t("backup.created_at", { path: "/tmp/backup.db" }))).toBeTruthy();
     });
   });
 
@@ -180,7 +181,7 @@ describe("BackupTab", () => {
       expect(screen.getByText("备份")).toBeTruthy();
     });
 
-    const createButton = screen.getByText("立即备份");
+    const createButton = screen.getByText(t("backup.create_now"));
     fireEvent.click(createButton);
 
     await waitFor(() => {
@@ -204,10 +205,10 @@ describe("BackupTab", () => {
       expect(screen.getByText("backup.db")).toBeTruthy();
     });
 
-    const restoreButton = screen.getByText("恢复");
+    const restoreButton = screen.getByText(t("backup.restore"));
     fireEvent.click(restoreButton);
 
-    expect(confirmMock).toHaveBeenCalledWith('Restore from backup "backup.db"? This will replace current data.');
+    expect(confirmMock).toHaveBeenCalledWith(t("backup.restore_confirm", { name: "backup.db" }));
     expect(mockApiClient.restoreBackup).not.toHaveBeenCalled();
   });
 
@@ -227,7 +228,7 @@ describe("BackupTab", () => {
       expect(screen.getByText("backup.db")).toBeTruthy();
     });
 
-    const restoreButton = screen.getByText("恢复");
+    const restoreButton = screen.getByText(t("backup.restore"));
     fireEvent.click(restoreButton);
 
     expect(mockApiClient.restoreBackup).toHaveBeenCalledWith("backup.db");
@@ -249,10 +250,10 @@ describe("BackupTab", () => {
       expect(screen.getByText("backup.db")).toBeTruthy();
     });
 
-    const deleteButton = screen.getByText("删除");
+    const deleteButton = screen.getByText(t("backup.delete"));
     fireEvent.click(deleteButton);
 
-    expect(confirmMock).toHaveBeenCalledWith('Delete backup "backup.db"? This cannot be undone.');
+    expect(confirmMock).toHaveBeenCalledWith(t("backup.delete_confirm", { name: "backup.db" }));
     expect(mockApiClient.deleteBackup).not.toHaveBeenCalled();
   });
 
@@ -272,7 +273,7 @@ describe("BackupTab", () => {
       expect(screen.getByText("backup.db")).toBeTruthy();
     });
 
-    const deleteButton = screen.getByText("删除");
+    const deleteButton = screen.getByText(t("backup.delete"));
     fireEvent.click(deleteButton);
 
     expect(mockApiClient.deleteBackup).toHaveBeenCalledWith("backup.db");
@@ -309,7 +310,7 @@ describe("BackupTab", () => {
       expect(screen.getByText("备份")).toBeTruthy();
     });
 
-    const createButton = screen.getByText("立即备份");
+    const createButton = screen.getByText(t("backup.create_now"));
     fireEvent.click(createButton);
 
     await waitFor(() => {
@@ -327,11 +328,11 @@ describe("BackupTab", () => {
       expect(screen.getByText("备份")).toBeTruthy();
     });
 
-    const verifyButton = screen.getByText("验证连接");
+    const verifyButton = screen.getByText(t("backup.verify_connection"));
     fireEvent.click(verifyButton);
 
     await waitFor(() => {
-      expect(screen.getByText("Backup location verified successfully")).toBeTruthy();
+      expect(screen.getByText(t("backup.verify_success"))).toBeTruthy();
     });
   });
 
@@ -349,7 +350,7 @@ describe("BackupTab", () => {
       expect(screen.getByText("备份")).toBeTruthy();
     });
 
-    const createButton = screen.getByText("立即备份");
+    const createButton = screen.getByText(t("backup.create_now"));
     fireEvent.click(createButton);
 
     await waitFor(() => {
@@ -372,7 +373,7 @@ describe("BackupTab", () => {
       expect(screen.getByText("备份")).toBeTruthy();
     });
 
-    const createButton = screen.getByText("立即备份");
+    const createButton = screen.getByText(t("backup.create_now"));
     fireEvent.click(createButton);
 
     await waitFor(() => {
@@ -394,7 +395,7 @@ describe("BackupTab", () => {
       expect(screen.getByText("备份")).toBeTruthy();
     });
 
-    const createButton = screen.getByText("立即备份");
+    const createButton = screen.getByText(t("backup.create_now"));
     fireEvent.click(createButton);
 
     await waitFor(() => {
