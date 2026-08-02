@@ -32,12 +32,12 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"little-timer/internal/domain"
 	httpapp "little-timer/internal/http/app"
+	"little-timer/internal/log"
 	"little-timer/internal/settings"
 	"little-timer/internal/storage"
 )
@@ -60,43 +60,50 @@ var wailsApp *application.App
 // must have a corresponding exported method on one of these types.
 // Add new methods to `wails_services.go`, not here.
 func bootWails() {
-	fmt.Fprintf(os.Stderr, "[bootWails] starting\n")
 	storagePath := application.Android.StoragePath()
-	fmt.Fprintf(os.Stderr, "[bootWails] StoragePath=%q\n", storagePath)
+
+	if err := log.Init(filepath.Join(storagePath, "logs")); err != nil {
+		log.Error("log.Init failed", "error", err.Error())
+	}
+
+	log.Info(fmt.Sprintf("[bootWails] StoragePath=%q", storagePath))
+	log.Info("[bootWails] starting")
 
 	dbPath := filepath.Join(storagePath, "little_timer.db")
-	fmt.Fprintf(os.Stderr, "[bootWails] dbPath=%q backupDir=%q\n", dbPath, filepath.Join(storagePath, "backups"))
+	log.Info(fmt.Sprintf("[bootWails] dbPath=%q backupDir=%q", dbPath, filepath.Join(storagePath, "backups")))
 
 	sqlite := storage.NewSqliteManager().Init(dbPath)
-	fmt.Fprintf(os.Stderr, "[bootWails] sqlite manager created\n")
+	log.Debug("[bootWails] sqlite manager created")
 	if err := sqlite.Open(); err != nil {
-		fmt.Fprintf(os.Stderr, "[bootWails] sqlite.Open FAILED: %v\n", err)
+		log.Error(fmt.Sprintf("[bootWails] sqlite.Open FAILED: %v", err))
 		panic(fmt.Sprintf("open sqlite: %v", err))
 	}
-	fmt.Fprintf(os.Stderr, "[bootWails] sqlite opened\n")
+	log.Debug("[bootWails] sqlite opened")
 	if err := sqlite.Migrate(); err != nil {
+		log.Error(fmt.Sprintf("[bootWails] migrate FAILED: %v", err))
 		panic(fmt.Sprintf("migrate: %v", err))
 	}
-	fmt.Fprintf(os.Stderr, "[bootWails] sqlite migrated\n")
+	log.Debug("[bootWails] sqlite migrated")
 
 	sm, err := settings.NewFromSqliteManager(sqlite, dbPath)
 	if err != nil {
+		log.Error(fmt.Sprintf("[bootWails] settings FAILED: %v", err))
 		panic(fmt.Sprintf("settings: %v", err))
 	}
-	fmt.Fprintf(os.Stderr, "[bootWails] settings created\n")
+	log.Debug("[bootWails] settings created")
 
 	clk := domain.NewClockManager(sm.BuildClockConfig())
-	fmt.Fprintf(os.Stderr, "[bootWails] clock created\n")
+	log.Debug("[bootWails] clock created")
 
 	// RebuildBackup derives the backup dir from dbPath (`<storage>/backups`)
 	// and honours the persisted BackupConfig, falling back to local on failure.
 	a := httpapp.NewApp(clk, sm, sqlite, nil, dbPath)
 	if err := a.RebuildBackup(context.Background()); err != nil {
-		fmt.Fprintf(os.Stderr, "[bootWails] backup disabled: %v\n", err)
+		log.Info(fmt.Sprintf("[bootWails] backup disabled: %v", err))
 	}
 
-	fmt.Fprintf(os.Stderr, "[bootWails] app created a=%p sqlite=%p sm=%p clk=%p bm=%p\n",
-		a, sqlite, sm, clk, a.BackupManager())
+	log.Debug(fmt.Sprintf("[bootWails] app created a=%p sqlite=%p sm=%p clk=%p bm=%p",
+		a, sqlite, sm, clk, a.BackupManager()))
 
 	wailsApp = application.New(application.Options{
 		Services: []application.Service{
@@ -109,16 +116,16 @@ func bootWails() {
 			Handler: application.BundledAssetFileServer(assets),
 		},
 	})
-	fmt.Fprintf(os.Stderr, "[bootWails] wailsApp created\n")
+	log.Debug("[bootWails] wailsApp created")
 
 	go func() {
-		fmt.Fprintf(os.Stderr, "[bootWails] wailsApp.Run starting\n")
+		log.Info("[bootWails] wailsApp.Run starting")
 		if err := wailsApp.Run(); err != nil {
-			fmt.Println("Wails runtime error:", err)
+			log.Error("wails runtime error", "error", err.Error())
 		}
-		fmt.Fprintf(os.Stderr, "[bootWails] wailsApp.Run exited\n")
+		log.Info("[bootWails] wailsApp.Run exited")
 	}()
-	fmt.Fprintf(os.Stderr, "[bootWails] done, goroutine started\n")
+	log.Info("[bootWails] done, goroutine started")
 }
 
 // init wires

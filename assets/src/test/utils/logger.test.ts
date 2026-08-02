@@ -58,6 +58,36 @@ describe("logger utils", () => {
     });
   });
 
+  describe("logToBackend routing", () => {
+    it("with wails bridge: routes via wails.log, skips fetch", () => {
+      const wailsLogMock = vi.fn();
+      vi.stubGlobal("window", {
+        wails: { log: wailsLogMock },
+        webui: undefined,
+        location: { search: "" },
+      });
+
+      logError("wails test error");
+
+      expect(wailsLogMock).toHaveBeenCalledWith("error", "wails test error");
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("without wails bridge: falls back to fetch /api/log", () => {
+      // beforeEach stubs window without wails — desktop fallback
+      logInfo("desktop test message");
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/log",
+        expect.objectContaining({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: expect.stringContaining("desktop test message"),
+        })
+      );
+    });
+  });
+
   describe("logSuccess", () => {
     it("应该记录成功日志", () => {
       logSuccess("Operation completed");

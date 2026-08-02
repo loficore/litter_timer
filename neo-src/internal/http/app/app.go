@@ -165,6 +165,7 @@ func (a *App) RebuildBackup(ctx context.Context) error {
 	a.Lock()
 	a.Backup = mgr
 	a.Unlock()
+	log.Info("RebuildBackup: ok", "target_type", cfg.TargetType.String())
 	return nil
 }
 
@@ -196,10 +197,12 @@ func defaultBackupDir(dbPath string) string {
 func (a *App) CreateTimerSession(habitID *int64, mode string, work, rest, loop int64) (int64, error) {
 	id, err := a.SQLite.Timers().CreateTimerSession(habitID, mode, work, rest, loop)
 	if err != nil {
+		log.Error("timer.session.create failed", "habit_id", habitID, "mode", mode, "error", err.Error())
 		return 0, err
 	}
 	a.CurrentTimerSessionID = &id
 	a.CurrentHabitID = habitID
+	log.Info("timer.session.create", "session_id", id, "habit_id", habitID, "mode", mode)
 	return id, nil
 }
 
@@ -212,10 +215,13 @@ func (a *App) FinishTimerSession() (int64, error) {
 		return 0, nil
 	}
 	if err := a.SQLite.Timers().FinishTimerSession(*sessionID); err != nil {
+		log.Error("timer.session.finish failed", "session_id", *sessionID, "error", err.Error())
 		return 0, err
 	}
 	state := a.Clock.Update()
-	return state.GetElapsedSeconds(), nil
+	elapsed := state.GetElapsedSeconds()
+	log.Info("timer.session.finish", "session_id", *sessionID, "elapsed", elapsed)
+	return elapsed, nil
 }
 
 // ResetTimerSession 清除内存中的当前会话指针并删除对应的 timer_session 行。调用方必须持有 a.mu 写锁。
@@ -224,10 +230,12 @@ func (a *App) FinishTimerSession() (int64, error) {
 func (a *App) ResetTimerSession() {
 	sessionID := a.CurrentTimerSessionID
 	a.CurrentTimerSessionID = nil
+	habitID := a.CurrentHabitID
 	a.CurrentHabitID = nil
 	if sessionID != nil {
 		_ = a.SQLite.Timers().DeleteTimerSession(*sessionID)
 	}
+	log.Info("timer.session.reset", "session_id", sessionID, "habit_id", habitID)
 }
 
 // LoadTimerProgress 重新读取最近未结束的 timer_session 到内存指针。调用方必须持有 a.mu 写锁。
@@ -236,6 +244,7 @@ func (a *App) ResetTimerSession() {
 func (a *App) LoadTimerProgress() {
 	row, err := a.SQLite.Timers().GetActiveTimerSession()
 	if err != nil {
+		log.Error("timer.session.load_progress failed", "error", err.Error())
 		return
 	}
 	id := row.ID
@@ -244,6 +253,7 @@ func (a *App) LoadTimerProgress() {
 		hid := *row.HabitID
 		a.CurrentHabitID = &hid
 	}
+	log.Info("timer.session.load_progress", "session_id", row.ID, "habit_id", row.HabitID, "elapsed", row.ElapsedSeconds)
 }
 
 // SaveProgressLocked 将当前时钟状态持久化到活动的 timer_session 行。调用方必须持有 a.mu 写锁。
@@ -257,6 +267,7 @@ func (a *App) SaveProgressLocked() {
 	now := time.Now().Unix()
 	row, err := a.SQLite.Timers().GetTimerSessionByID(*a.CurrentTimerSessionID)
 	if err != nil {
+		log.Error("timer.session.save_progress failed", "session_id", *a.CurrentTimerSessionID, "error", err.Error())
 		return
 	}
 	pausedTotal := row.PausedTotalSeconds
@@ -278,6 +289,7 @@ func (a *App) SaveProgressLocked() {
 		isRunning, isPaused, state.IsFinished(),
 		row.CurrentRound, state.InRest(),
 	)
+	log.Info("timer.session.save_progress", "session_id", row.ID, "elapsed", state.GetElapsedSeconds())
 }
 
 // -----------------------------------------------------------------------------

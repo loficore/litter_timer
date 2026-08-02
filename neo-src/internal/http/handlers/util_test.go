@@ -24,9 +24,17 @@ func TestHandleFrontendLog_ValidEntry(t *testing.T) {
 		t.Fatalf("code = %d, body = %s", w.Code, w.Body.String())
 	}
 
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response not JSON: %v", err)
+	}
+	if got["success"] != true {
+		t.Errorf("success = %v, want true", got["success"])
+	}
+	// Verify no log text leaked into the response body.
 	bodyStr := w.Body.String()
-	if !strings.Contains(bodyStr, `"success":true`) && !strings.Contains(bodyStr, `"success": true`) {
-		t.Errorf("expected success=true in body, got %s", bodyStr)
+	if strings.Contains(bodyStr, "test message") {
+		t.Errorf("response body contains log text, want pure JSON: %s", bodyStr)
 	}
 }
 
@@ -49,6 +57,9 @@ func TestHandleFrontendLog_EmptyBody(t *testing.T) {
 	if got["success"] != false {
 		t.Errorf("success = %v, want false for empty body", got["success"])
 	}
+	if got["err"] != "empty body" {
+		t.Errorf("err = %v, want 'empty body'", got["err"])
+	}
 }
 
 func TestHandleFrontendLog_InvalidJSON(t *testing.T) {
@@ -70,6 +81,9 @@ func TestHandleFrontendLog_InvalidJSON(t *testing.T) {
 	if got["success"] != false {
 		t.Errorf("success = %v, want false for invalid JSON", got["success"])
 	}
+	if got["err"] != "invalid json" {
+		t.Errorf("err = %v, want 'invalid json'", got["err"])
+	}
 }
 
 func TestHandleFrontendLog_MissingLevel(t *testing.T) {
@@ -85,9 +99,17 @@ func TestHandleFrontendLog_MissingLevel(t *testing.T) {
 		t.Fatalf("code = %d", w.Code)
 	}
 
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response not JSON: %v", err)
+	}
+	if got["success"] != true {
+		t.Errorf("success = %v, want true", got["success"])
+	}
+	// Verify no log text leaked into the response body.
 	bodyStr := w.Body.String()
-	if !strings.Contains(bodyStr, `"success":true`) && !strings.Contains(bodyStr, `"success": true`) {
-		t.Errorf("expected success=true in body, got %s", bodyStr)
+	if strings.Contains(bodyStr, "test message") {
+		t.Errorf("response body contains log text, want pure JSON: %s", bodyStr)
 	}
 }
 
@@ -104,9 +126,17 @@ func TestHandleFrontendLog_ErrorLevel(t *testing.T) {
 		t.Fatalf("code = %d", w.Code)
 	}
 
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response not JSON: %v", err)
+	}
+	if got["success"] != true {
+		t.Errorf("success = %v, want true", got["success"])
+	}
+	// Verify no log text leaked into the response body.
 	bodyStr := w.Body.String()
-	if !strings.Contains(bodyStr, `"success":true`) && !strings.Contains(bodyStr, `"success": true`) {
-		t.Errorf("expected success=true in body, got %s", bodyStr)
+	if strings.Contains(bodyStr, "error message") {
+		t.Errorf("response body contains log text, want pure JSON: %s", bodyStr)
 	}
 }
 

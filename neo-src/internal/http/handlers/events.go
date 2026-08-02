@@ -13,7 +13,9 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -128,14 +130,6 @@ func FrontendLog(c *gin.Context) {
 	if entry.Level == "" {
 		entry.Level = "info"
 	}
-	prefix := fmt.Sprintf("[frontend:%s][%s]", entry.Category, entry.Runtime)
-	switch entry.Level {
-	case "error":
-		// ponytail: gin's release-mode logger strips debug lines,
-		// so we route everything through fmt.Fprintf to stderr.
-		fmt.Fprintf(c.Writer, "%s ERROR: %s\n", prefix, entry.Message)
-	default:
-		fmt.Fprintf(c.Writer, "%s %s: %s\n", prefix, entry.Level, entry.Message)
-	}
+log.Printf("[frontend:%s][%s] %s: %s", entry.Category, entry.Runtime, strings.ToUpper(entry.Level), entry.Message)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }

@@ -146,6 +146,12 @@ const shouldLog = (category: LogCategory): boolean => {
 const logToBackend = (category: LogCategory, message: string, level: 'info' | 'error') => {
   if (typeof window === 'undefined') return;
 
+  // Android: route through Wails JS bridge → logcat (tag: WailsJSBridge/JS)
+  if ((window as any).wails && typeof (window as any).wails.log === 'function') {
+    (window as any).wails.log(level === 'error' ? 'error' : 'info', message);
+    return;
+  }
+
   const runtime = getFrontendRuntime();
 
   // 优先使用 HTTP 日志接口，便于统一落盘。

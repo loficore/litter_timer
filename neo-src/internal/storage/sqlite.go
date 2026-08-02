@@ -17,6 +17,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
+
+	"little-timer/internal/log"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -93,6 +96,7 @@ func (m *SqliteManager) Init(dbPath string) *SqliteManager {
 // errors, but we surface them so the caller can decide.
 func (m *SqliteManager) Open() error {
 	if m.dbPath == "" {
+		log.Error("storage.open failed", "error", "Init(dbPath) must be called before Open()")
 		return errors.New("storage: Init(dbPath) must be called before Open()")
 	}
 	if m.db != nil {
@@ -105,6 +109,7 @@ func (m *SqliteManager) Open() error {
 			// MkdirAll returns EEXIST when the directory is already there;
 			// that's fine.  Anything else is a hard error.
 			if !errors.Is(err, os.ErrExist) {
+				log.Error("storage.open failed", "db_path", m.dbPath, "error", err.Error())
 				return fmt.Errorf("%w: mkdir %s: %w", ErrDatabaseOpenFailed, dir, err)
 			}
 		}
@@ -117,26 +122,28 @@ func (m *SqliteManager) Open() error {
 	// Open the SQLite file.
 	db, err := sql.Open(sqliteDriverName, m.dbPath)
 	if err != nil {
+		log.Error("storage.open failed", "db_path", m.dbPath, "error", err.Error())
 		return fmt.Errorf("%w: %w", ErrDatabaseOpenFailed, err)
 	}
 	// Ping forces an actual connect so the file is created on disk before we
 	// try to chmod it.
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
+		log.Error("storage.open failed", "db_path", m.dbPath, "error", err.Error())
 		return fmt.Errorf("%w: ping: %w", ErrDatabaseOpenFailed, err)
 	}
 
 	// Hard file permission: 0600 (matches Zig `chmod(path, 0o600)`).
 	if err := os.Chmod(m.dbPath, 0o600); err != nil {
 		// Non-fatal but worth surfacing — the spec calls this out as a
-		// security step.  We log via stderr to keep the package
-		// logging-free (logger package hasn't been ported yet).
-		fmt.Fprintf(os.Stderr, "storage: chmod 0600 %s: %v\n", m.dbPath, err)
+		// security step.  The warning uses the shared logger.
+		log.Warn("storage.chmod", "db_path", m.dbPath, "error", err.Error())
 	}
 
 	// Enable foreign keys on every connection.
 	if _, err := db.Exec(`PRAGMA foreign_keys = ON;`); err != nil {
 		_ = db.Close()
+		log.Error("storage.open failed", "db_path", m.dbPath, "error", err.Error())
 		return fmt.Errorf("%w: pragma foreign_keys: %w", ErrDatabaseOpenFailed, err)
 	}
 
@@ -150,6 +157,7 @@ func (m *SqliteManager) Open() error {
 	m.habits.SetDB(db)
 	m.timers.SetDB(db)
 
+	log.Info("storage.open", "db_path", m.dbPath)
 	return nil
 }
 
@@ -159,7 +167,10 @@ func (m *SqliteManager) Migrate() error {
 	if m.db == nil {
 		return ErrDatabaseNotConnected
 	}
-	return m.migration.CheckAndMigrate()
+	start := time.Now()
+	err := m.migration.CheckAndMigrate()
+	log.Info("storage.migrate", "duration_ms", time.Since(start).Milliseconds())
+	return err
 }
 
 // Close 关闭底层 *sql.DB 并清空子模块的句柄引用。

@@ -50,6 +50,7 @@ func NewTimerService(app *App) *TimerService { return &TimerService{app: app} }
 
 // GetState mirrors handleGetState — returns the live clock state.
 func (s *TimerService) GetState() (any, error) {
+	log.Debug("timer.get_state", "method", "TimerService.GetState")
 	a := s.app
 	state := a.Clock.Update()
 	tz := a.Settings.Config().Basic.Timezone
@@ -76,6 +77,7 @@ func (s *TimerService) GetState() (any, error) {
 // StartTimer mirrors handleStart. All parameters are optional — the
 // handler-equivalent defaults apply (stopwatch, 25 min work).
 func (s *TimerService) StartTimer(habitID *int64, mode string, workDuration int64, restDuration int64, loopCount int64) (any, error) {
+	log.Debug("timer.start", "method", "TimerService.StartTimer", "habit_id", habitID, "mode", mode)
 	a := s.app
 
 	m := "stopwatch"
@@ -140,10 +142,12 @@ func (s *TimerService) StartTimer(habitID *int64, mode string, workDuration int6
 
 	sessionID, err := a.CreateTimerSession(habitID, m, work, restDuration, loopCount)
 	if err != nil {
+		log.Error("timer.start failed", "method", "TimerService.StartTimer", "error", err.Error())
 		return nil, err
 	}
 	a.CurrentHabitID = habitID
 	a.Clock.HandleEvent(domain.UserStartTimerEvent{})
+	log.Info("timer.start ok", "method", "TimerService.StartTimer", "session_id", sessionID, "habit_id", habitID, "mode", m)
 	return map[string]any{
 		"status":     "started",
 		"habit_id":   habitID,
@@ -154,6 +158,7 @@ func (s *TimerService) StartTimer(habitID *int64, mode string, workDuration int6
 // FinishTimer mirrors handleFinish — freezes the clock and emits a
 // daily session row tied to the current habit.
 func (s *TimerService) FinishTimer() (any, error) {
+	log.Debug("timer.finish", "method", "TimerService.FinishTimer")
 	a := s.app
 	a.Lock()
 	defer a.Unlock()
@@ -163,6 +168,7 @@ func (s *TimerService) FinishTimer() (any, error) {
 
 	elapsed, err := a.FinishTimerSession()
 	if err != nil {
+		log.Error("timer.finish failed", "method", "TimerService.FinishTimer", "error", err.Error())
 		// Fallback path — same shape as Zig: emit user_finish_timer,
 		// compute elapsed from the clock state, and persist a daily
 		// session if there was an active habit.
@@ -184,6 +190,7 @@ func (s *TimerService) FinishTimer() (any, error) {
 	}
 	a.ResetTimerSession()
 
+	log.Info("timer.finish ok", "method", "TimerService.FinishTimer", "elapsed_seconds", elapsed, "session_id", sessionID)
 	return map[string]any{
 		"status":          "finished",
 		"elapsed_seconds": elapsed,
@@ -195,6 +202,7 @@ func (s *TimerService) FinishTimer() (any, error) {
 // + mode + paused/finished flags.  Lazily loads progress if no
 // current session is active.
 func (s *TimerService) GetProgress() (any, error) {
+	log.Debug("timer.get_progress", "method", "TimerService.GetProgress")
 	a := s.app
 
 	a.RLock()
@@ -226,6 +234,7 @@ func (s *TimerService) GetProgress() (any, error) {
 // StartRest mirrors handleStartRest — switches the clock into a
 // 5-minute countdown and starts it.
 func (s *TimerService) StartRest() (any, error) {
+	log.Debug("timer.start_rest", "method", "TimerService.StartRest")
 	a := s.app
 	const restSeconds uint64 = 5 * 60
 
@@ -252,16 +261,19 @@ func (s *TimerService) StartRest() (any, error) {
 
 // PauseTimer mirrors handlePause.
 func (s *TimerService) PauseTimer() (any, error) {
+	log.Debug("timer.pause", "method", "TimerService.PauseTimer")
 	a := s.app
 	a.Lock()
 	defer a.Unlock()
 	a.Clock.HandleEvent(domain.UserPauseTimerEvent{})
 	a.SaveProgressLocked()
+	log.Info("timer.pause ok", "method", "TimerService.PauseTimer")
 	return map[string]any{"status": "paused"}, nil
 }
 
 // ResetTimer mirrors handleReset.
 func (s *TimerService) ResetTimer() (any, error) {
+	log.Debug("timer.reset", "method", "TimerService.ResetTimer")
 	a := s.app
 	a.Lock()
 	defer a.Unlock()
@@ -275,6 +287,14 @@ func (s *TimerService) ResetTimer() (any, error) {
 // HabitService — mirrors the habit / habit-set / session endpoints.
 // -----------------------------------------------------------------------------
 
+// truncStr returns s truncated to 64 chars to avoid log spam.
+func truncStr(s string) string {
+	if len(s) > 64 {
+		return s[:64]
+	}
+	return s
+}
+
 // HabitService exposes habit CRUD + session queries to the Wails v3
 // frontend.
 type HabitService struct {
@@ -286,8 +306,10 @@ func NewHabitService(app *App) *HabitService { return &HabitService{app: app} }
 
 // ListHabitSets mirrors handleHabitSetList.
 func (s *HabitService) ListHabitSets() (any, error) {
+	log.Debug("habit.list_sets", "method", "HabitService.ListHabitSets")
 	rows, err := s.app.SQLite.HabitSets().List(100, 0)
 	if err != nil {
+		log.Error("habit.list_sets failed", "method", "HabitService.ListHabitSets", "error", err.Error())
 		return nil, err
 	}
 	return rows, nil
@@ -295,6 +317,7 @@ func (s *HabitService) ListHabitSets() (any, error) {
 
 // CreateHabitSet mirrors handleHabitSetCreate.
 func (s *HabitService) CreateHabitSet(name string, description string, color string) (any, error) {
+	log.Debug("habit.create_set", "method", "HabitService.CreateHabitSet", "name", truncStr(name), "color", color)
 	if name == "" {
 		return nil, errEmptyName
 	}
@@ -303,8 +326,10 @@ func (s *HabitService) CreateHabitSet(name string, description string, color str
 	}
 	id, err := s.app.SQLite.HabitSets().Create(name, description, color)
 	if err != nil {
+		log.Error("habit.create_set failed", "method", "HabitService.CreateHabitSet", "name", truncStr(name), "error", err.Error())
 		return nil, err
 	}
+	log.Info("habit.create_set ok", "method", "HabitService.CreateHabitSet", "id", id)
 	return map[string]any{
 		"id":          id,
 		"name":        name,
@@ -315,6 +340,7 @@ func (s *HabitService) CreateHabitSet(name string, description string, color str
 
 // UpdateHabitSet mirrors handleHabitSetUpdate.
 func (s *HabitService) UpdateHabitSet(id int64, name string, description string, color string, wallpaper string) (any, error) {
+	log.Debug("habit.update_set", "method", "HabitService.UpdateHabitSet", "id", id, "name", truncStr(name), "color", color)
 	if name == "" {
 		return nil, errEmptyName
 	}
@@ -322,8 +348,10 @@ func (s *HabitService) UpdateHabitSet(id int64, name string, description string,
 		color = domain.DefaultColor
 	}
 	if err := s.app.SQLite.HabitSets().Update(id, name, description, color, wallpaper); err != nil {
+		log.Error("habit.update_set failed", "method", "HabitService.UpdateHabitSet", "id", id, "error", err.Error())
 		return nil, err
 	}
+	log.Info("habit.update_set ok", "method", "HabitService.UpdateHabitSet", "id", id)
 	return map[string]any{
 		"id":          id,
 		"name":        name,
@@ -335,15 +363,19 @@ func (s *HabitService) UpdateHabitSet(id int64, name string, description string,
 
 // DeleteHabitSet mirrors handleHabitSetDelete.
 func (s *HabitService) DeleteHabitSet(id int64) (any, error) {
+	log.Debug("habit.delete_set", "method", "HabitService.DeleteHabitSet", "id", id)
 	if err := s.app.SQLite.HabitSets().Delete(id); err != nil {
+		log.Error("habit.delete_set failed", "method", "HabitService.DeleteHabitSet", "id", id, "error", err.Error())
 		return nil, err
 	}
+	log.Info("habit.delete_set ok", "method", "HabitService.DeleteHabitSet", "id", id)
 	return map[string]any{"success": true}, nil
 }
 
 // ListHabits mirrors handleHabitList.  When setID is nil, returns
 // every habit; otherwise scopes to the requested set.
 func (s *HabitService) ListHabits(setID *int64) (any, error) {
+	log.Debug("habit.list", "method", "HabitService.ListHabits", "set_id", setID)
 	var (
 		rows []storage.HabitRow
 		err  error
@@ -355,6 +387,7 @@ func (s *HabitService) ListHabits(setID *int64) (any, error) {
 		rows, err = s.app.SQLite.Habits().List(limit, offset)
 	}
 	if err != nil {
+		log.Error("habit.list failed", "method", "HabitService.ListHabits", "error", err.Error())
 		return nil, err
 	}
 	return rows, nil
@@ -362,6 +395,7 @@ func (s *HabitService) ListHabits(setID *int64) (any, error) {
 
 // CreateHabit mirrors handleHabitCreate.
 func (s *HabitService) CreateHabit(setID int64, name string, goalSeconds int64, color string) (any, error) {
+	log.Debug("habit.create", "method", "HabitService.CreateHabit", "set_id", setID, "name", truncStr(name), "goal_seconds", goalSeconds)
 	if name == "" {
 		return nil, errEmptyName
 	}
@@ -373,8 +407,10 @@ func (s *HabitService) CreateHabit(setID int64, name string, goalSeconds int64, 
 	}
 	id, err := s.app.SQLite.Habits().Create(setID, name, goalSeconds, color)
 	if err != nil {
+		log.Error("habit.create failed", "method", "HabitService.CreateHabit", "name", truncStr(name), "error", err.Error())
 		return nil, err
 	}
+	log.Info("habit.create ok", "method", "HabitService.CreateHabit", "id", id)
 	return map[string]any{
 		"id":           id,
 		"set_id":       setID,
@@ -386,6 +422,7 @@ func (s *HabitService) CreateHabit(setID int64, name string, goalSeconds int64, 
 
 // UpdateHabit mirrors handleHabitUpdate.
 func (s *HabitService) UpdateHabit(id int64, name string, goalSeconds int64, color string, wallpaper string) (any, error) {
+	log.Debug("habit.update", "method", "HabitService.UpdateHabit", "id", id, "name", truncStr(name), "goal_seconds", goalSeconds, "color", color)
 	if name == "" {
 		return nil, errEmptyName
 	}
@@ -396,8 +433,10 @@ func (s *HabitService) UpdateHabit(id int64, name string, goalSeconds int64, col
 		color = domain.DefaultColor
 	}
 	if err := s.app.SQLite.Habits().Update(id, name, goalSeconds, color, wallpaper); err != nil {
+		log.Error("habit.update failed", "method", "HabitService.UpdateHabit", "id", id, "error", err.Error())
 		return nil, err
 	}
+	log.Info("habit.update ok", "method", "HabitService.UpdateHabit", "id", id)
 	return map[string]any{
 		"id":           id,
 		"name":         name,
@@ -409,15 +448,19 @@ func (s *HabitService) UpdateHabit(id int64, name string, goalSeconds int64, col
 
 // DeleteHabit mirrors handleHabitDelete.
 func (s *HabitService) DeleteHabit(id int64) (any, error) {
+	log.Debug("habit.delete", "method", "HabitService.DeleteHabit", "id", id)
 	if err := s.app.SQLite.Habits().Delete(id); err != nil {
+		log.Error("habit.delete failed", "method", "HabitService.DeleteHabit", "id", id, "error", err.Error())
 		return nil, err
 	}
+	log.Info("habit.delete ok", "method", "HabitService.DeleteHabit", "id", id)
 	return map[string]any{"success": true}, nil
 }
 
 // CreateSession mirrors handleSessionCreate.  Empty `date` defaults
 // to today.
 func (s *HabitService) CreateSession(habitID int64, durationSeconds int64, count int64, date string) (any, error) {
+	log.Debug("habit.create_session", "method", "HabitService.CreateSession", "habit_id", habitID, "duration_seconds", durationSeconds, "count", count)
 	if date == "" {
 		date = domain.TodayString(s.app.Settings.Config().Basic.Timezone)
 	}
@@ -426,8 +469,10 @@ func (s *HabitService) CreateSession(habitID int64, durationSeconds int64, count
 	}
 	id, err := s.app.SQLite.Timers().CreateSession(habitID, durationSeconds, count, date)
 	if err != nil {
+		log.Error("habit.create_session failed", "method", "HabitService.CreateSession", "habit_id", habitID, "error", err.Error())
 		return nil, err
 	}
+	log.Info("habit.create_session ok", "method", "HabitService.CreateSession", "id", id)
 	return map[string]any{
 		"id":               id,
 		"habit_id":         habitID,
@@ -440,6 +485,7 @@ func (s *HabitService) CreateSession(habitID int64, durationSeconds int64, count
 // supported (matching the Zig source): a single date, a date range,
 // or no filter (= today).
 func (s *HabitService) ListSessions(date string, startDate string, endDate string) (any, error) {
+	log.Debug("habit.list_sessions", "method", "HabitService.ListSessions", "date", date, "start_date", startDate, "end_date", endDate)
 	var (
 		rows []storage.SessionRow
 		err  error
@@ -454,6 +500,7 @@ func (s *HabitService) ListSessions(date string, startDate string, endDate strin
 		rows, err = s.app.SQLite.Timers().ListSessionsByDate(domain.TodayString(s.app.Settings.Config().Basic.Timezone), limit, offset)
 	}
 	if err != nil {
+		log.Error("habit.list_sessions failed", "method", "HabitService.ListSessions", "error", err.Error())
 		return nil, err
 	}
 	return rows, nil
@@ -462,12 +509,14 @@ func (s *HabitService) ListSessions(date string, startDate string, endDate strin
 // GetHabitDetail mirrors handleHabitDetail — single habit with
 // today's accumulated seconds + progress percent.
 func (s *HabitService) GetHabitDetail(id int64, date string) (any, error) {
+	log.Debug("habit.detail", "method", "HabitService.GetHabitDetail", "id", id, "date", date)
 	a := s.app
 	if date == "" {
 		date = domain.TodayString(a.Settings.Config().Basic.Timezone)
 	}
 	row, err := a.SQLite.Habits().GetByID(id)
 	if err != nil {
+		log.Error("habit.detail failed", "method", "HabitService.GetHabitDetail", "id", id, "error", err.Error())
 		return nil, err
 	}
 	todaySeconds, _ := a.SQLite.Timers().TodaySecondsForHabit(id, date)
@@ -500,15 +549,19 @@ func NewSettingsService(app *App) *SettingsService { return &SettingsService{app
 
 // GetSettings mirrors handleSettingsGet.
 func (s *SettingsService) GetSettings() (any, error) {
+	log.Debug("settings.get", "method", "SettingsService.GetSettings")
 	return s.app.Settings.Config(), nil
 }
 
 // UpdateSettings mirrors handleSettingsUpdate — applies a partial
 // SettingsConfig via SettingsManager.HandleSettingsEvent.
 func (s *SettingsService) UpdateSettings(json string) (any, error) {
+	log.Debug("settings.update", "method", "SettingsService.UpdateSettings")
 	if err := s.app.Settings.HandleSettingsEvent(domain.SettingsChangeEvent{JSON: json}); err != nil {
+		log.Error("settings.update failed", "method", "SettingsService.UpdateSettings", "error", err.Error())
 		return map[string]any{"success": false, "error": err.Error()}, nil
 	}
+	log.Info("settings.update ok", "method", "SettingsService.UpdateSettings")
 	return map[string]any{"status": "settings_updated"}, nil
 }
 
@@ -529,6 +582,7 @@ func NewBackupService(app *App) *BackupService { return &BackupService{app: app}
 // persisted BackupConfig with secrets masked.
 func (s *BackupService) GetBackupConfig() (any, error) {
 	cfg := s.app.Settings.BackupConfig()
+	log.Debug("backup.get_config", "method", "BackupService.GetBackupConfig", "target_type", cfg.TargetType.String())
 	return map[string]any{
 		"enabled":              cfg.Enabled,
 		"auto_backup":          cfg.AutoBackup,
@@ -550,7 +604,10 @@ func (s *BackupService) GetBackupConfig() (any, error) {
 // UpdateBackupConfig mirrors handleBackupConfigUpdate — applies a
 // JSON BackupConfig update via SettingsManager.UpdateBackupConfigFromJSON.
 func (s *BackupService) UpdateBackupConfig(json string) (any, error) {
+	cfg := s.app.Settings.BackupConfig()
+	log.Debug("backup.update_config", "method", "BackupService.UpdateBackupConfig", "target_type", cfg.TargetType.String())
 	if err := s.app.Settings.UpdateBackupConfigFromJSON(json); err != nil {
+		log.Error("backup.update_config failed", "method", "BackupService.UpdateBackupConfig", "error", err.Error())
 		return map[string]any{"success": false, "error": err.Error()}, nil
 	}
 	// Config is persisted; rebuild the manager from it.  A rebuild
@@ -559,37 +616,45 @@ func (s *BackupService) UpdateBackupConfig(json string) (any, error) {
 	if err := s.app.RebuildBackup(context.Background()); err != nil {
 		log.Error("UpdateBackupConfig: rebuild failed", "error", err.Error())
 	}
+	log.Info("backup.update_config ok", "method", "BackupService.UpdateBackupConfig", "target_type", cfg.TargetType.String())
 	return map[string]any{"success": true}, nil
 }
 
 // CreateBackup mirrors handleBackupCreate.
 func (s *BackupService) CreateBackup() (any, error) {
 	a := s.app
+	cfg := a.Settings.BackupConfig()
+	log.Debug("backup.create", "method", "BackupService.CreateBackup", "target_type", cfg.TargetType.String())
 	bm := a.BackupManager()
 	if bm == nil {
 		return map[string]any{"success": false, "error": "backup not configured"}, nil
 	}
-	cfg := a.Settings.BackupConfig()
 	if !cfg.Enabled {
 		return map[string]any{"success": false, "error": "backup not enabled"}, nil
 	}
 	name, err := bm.CreateBackup()
 	if err != nil {
+		log.Error("backup.create failed", "method", "BackupService.CreateBackup", "error", err.Error())
 		return map[string]any{"success": false, "error": err.Error()}, nil
 	}
+	log.Info("backup.create ok", "method", "BackupService.CreateBackup", "target_type", cfg.TargetType.String(), "backup_name", name)
 	return map[string]any{"success": true, "backup_path": name}, nil
 }
 
 // RestoreBackup mirrors handleBackupRestore.
 func (s *BackupService) RestoreBackup(name string) (any, error) {
 	a := s.app
+	cfg := a.Settings.BackupConfig()
+	log.Debug("backup.restore", "method", "BackupService.RestoreBackup", "target_type", cfg.TargetType.String())
 	bm := a.BackupManager()
 	if bm == nil {
 		return map[string]any{"success": false, "error": "backup not configured"}, nil
 	}
 	if err := bm.RestoreFromBackup(name); err != nil {
+		log.Error("backup.restore failed", "method", "BackupService.RestoreBackup", "error", err.Error())
 		return map[string]any{"success": false, "error": err.Error()}, nil
 	}
+	log.Info("backup.restore ok", "method", "BackupService.RestoreBackup", "target_type", cfg.TargetType.String(), "backup_name", name)
 	return map[string]any{"success": true}, nil
 }
 
@@ -598,13 +663,17 @@ func (s *BackupService) RestoreBackup(name string) (any, error) {
 // prefix).
 func (s *BackupService) DeleteBackup(name string) (any, error) {
 	a := s.app
+	cfg := a.Settings.BackupConfig()
+	log.Debug("backup.delete", "method", "BackupService.DeleteBackup", "target_type", cfg.TargetType.String())
 	bm := a.BackupManager()
 	if bm == nil {
 		return map[string]any{"success": false, "error": "backup not configured"}, nil
 	}
 	if err := bm.DeleteBackup(name); err != nil {
+		log.Error("backup.delete failed", "method", "BackupService.DeleteBackup", "error", err.Error())
 		return map[string]any{"success": false, "error": err.Error()}, nil
 	}
+	log.Info("backup.delete ok", "method", "BackupService.DeleteBackup", "target_type", cfg.TargetType.String(), "backup_name", name)
 	return map[string]any{"success": true}, nil
 }
 
@@ -612,41 +681,52 @@ func (s *BackupService) DeleteBackup(name string) (any, error) {
 // configured adapter's connection.
 func (s *BackupService) VerifyBackup() (any, error) {
 	a := s.app
+	cfg := a.Settings.BackupConfig()
+	log.Debug("backup.verify", "method", "BackupService.VerifyBackup", "target_type", cfg.TargetType.String())
 	bm := a.BackupManager()
 	if bm == nil {
 		return map[string]any{"success": false, "error": "backup not configured"}, nil
 	}
-	if !a.Settings.BackupConfig().Enabled {
+	if !cfg.Enabled {
 		return map[string]any{"success": false, "error": "backup not enabled"}, nil
 	}
 	if err := bm.TestConnection(); err != nil {
+		log.Error("backup.verify failed", "method", "BackupService.VerifyBackup", "error", err.Error())
 		return map[string]any{"success": false, "error": err.Error()}, nil
 	}
+	log.Info("backup.verify ok", "method", "BackupService.VerifyBackup", "target_type", cfg.TargetType.String())
 	return map[string]any{"success": true}, nil
 }
 
 // ListBackups mirrors handleBackupList.
 func (s *BackupService) ListBackups() (any, error) {
 	a := s.app
+	cfg := a.Settings.BackupConfig()
+	log.Debug("backup.list", "method", "BackupService.ListBackups", "target_type", cfg.TargetType.String())
 	bm := a.BackupManager()
 	if bm == nil {
 		return map[string]any{"success": true, "backups": []any{}}, nil
 	}
 	items, err := bm.ListBackups()
 	if err != nil {
+		log.Error("backup.list failed", "method", "BackupService.ListBackups", "error", err.Error())
 		return map[string]any{"success": true, "backups": []any{}}, nil
 	}
+	log.Info("backup.list ok", "method", "BackupService.ListBackups", "target_type", cfg.TargetType.String(), "count", len(items))
 	return map[string]any{"success": true, "backups": items}, nil
 }
 
 // GetMasterPasswordStatus mirrors handleMasterPasswordGet.
 func (s *BackupService) GetMasterPasswordStatus() (any, error) {
-	return s.app.GetMasterPasswordStatus(), nil
+	status := s.app.GetMasterPasswordStatus()
+	log.Debug("backup.master_status", "method", "BackupService.GetMasterPasswordStatus", "has_cred", status.HasPassword)
+	return status, nil
 }
 
 // SetMasterPassword mirrors handleMasterPasswordSet — enforces the
 // 4-character minimum that matches the Zig validator.
 func (s *BackupService) SetMasterPassword(password string) (any, error) {
+	log.Debug("backup.set_master", "method", "BackupService.SetMasterPassword", "has_cred", password != "")
 	if password == "" {
 		return map[string]any{"success": false, "error": "missing password"}, nil
 	}
@@ -654,14 +734,18 @@ func (s *BackupService) SetMasterPassword(password string) (any, error) {
 		return map[string]any{"success": false, "error": "password too short (minimum 4 characters)"}, nil
 	}
 	if err := s.app.SetMasterPassword(password); err != nil {
+		log.Error("backup.set_master failed", "method", "BackupService.SetMasterPassword", "error", err.Error())
 		return map[string]any{"success": false, "error": err.Error()}, nil
 	}
+	log.Info("backup.set_master ok", "method", "BackupService.SetMasterPassword")
 	return map[string]any{"success": true}, nil
 }
 
 // UnlockCredentials mirrors handleBackupUnlock.
 func (s *BackupService) UnlockCredentials(password string) (any, error) {
+	log.Debug("backup.unlock", "method", "BackupService.UnlockCredentials")
 	res := s.app.UnlockCredentials(password)
+	log.Info("backup.unlock ok", "method", "BackupService.UnlockCredentials", "success", res.Success)
 	return map[string]any{
 		"success":      res.Success,
 		"locked_until": res.LockedUntil,
@@ -670,7 +754,9 @@ func (s *BackupService) UnlockCredentials(password string) (any, error) {
 
 // LockCredentials mirrors handleBackupLock.
 func (s *BackupService) LockCredentials() (any, error) {
+	log.Debug("backup.lock", "method", "BackupService.LockCredentials")
 	s.app.LockCredentials()
+	log.Info("backup.lock ok", "method", "BackupService.LockCredentials")
 	return map[string]any{"success": true}, nil
 }
 

@@ -95,11 +95,7 @@ func Init(logDir string) error {
 	if err != nil {
 		return err
 	}
-	h := &textHandler{
-		Handler: slog.NewTextHandler(file, nil),
-		file:    file,
-	}
-	logger = slog.New(h)
+	logger = slog.New(initSink(file))
 	return nil
 }
 

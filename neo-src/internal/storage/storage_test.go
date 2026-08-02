@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -595,8 +596,20 @@ func TestHealthCheckIsHealthy(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// Column shape check — guards against silent schema drift.
+// Unwritable-dir guard — pre-existing behavior, unchanged.
 // -----------------------------------------------------------------------------
+
+func TestOpenUnwritableDir(t *testing.T) {
+	m := NewSqliteManager().Init("/proc/nonexistent/little_timer.db")
+	err := m.Open()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, ErrDatabaseOpenFailed) {
+		t.Errorf("expected ErrDatabaseOpenFailed, got: %v", err)
+	}
+	t.Cleanup(func() { _ = m.Close() })
+}
 
 func TestHabitSetsColumnsMatchZigSchema(t *testing.T) {
 	m := openTempSqlite(t)
