@@ -21,6 +21,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -340,6 +342,63 @@ func TestWebDAVTestConnection_GETProbePermissionDenied(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
+// Test 4d — TestConnection GET probe returns auth failure (401)
+// -----------------------------------------------------------------------------
+
+func TestWebDAVTestConnection_GETProbeAuthFailure(t *testing.T) {
+	store := make(map[string][]byte)
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch r.Method {
+		case http.MethodPut:
+			body, _ := io.ReadAll(r.Body)
+			store[r.URL.Path] = body
+			w.WriteHeader(http.StatusCreated)
+		case http.MethodGet:
+			w.WriteHeader(http.StatusUnauthorized)
+		case http.MethodDelete:
+			delete(store, r.URL.Path)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	defer srv.Close()
+
+	adapter := NewWebDAVAdapter(WebDAVConfig{
+		URL:      srv.URL,
+		BasePath: "/backups",
+		Username: "testuser",
+		Password: "testpass",
+	})
+	adapter.client = srv.Client()
+
+	err := adapter.TestConnection()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, ErrAuthenticationFail) {
+		t.Errorf("expected ErrAuthenticationFail, got %v", err)
+	}
+	// Verify the error message contains the probe URL and auth status
+	errStr := err.Error()
+	if !strings.Contains(errStr, "GET") {
+		t.Errorf("error message should contain GET, got: %s", errStr)
+	}
+	if !strings.Contains(errStr, "401") {
+		t.Errorf("error message should contain 401, got: %s", errStr)
+	}
+	if !strings.Contains(errStr, "auth=basic") {
+		t.Errorf("error message should contain auth=basic, got: %s", errStr)
+	}
+	if !strings.Contains(errStr, "lt_probe_") {
+		t.Errorf("error message should contain probe URL, got: %s", errStr)
+	}
+}
+
+// -----------------------------------------------------------------------------
 // Test 5 — List (PROPFIND multistatus)
 // -----------------------------------------------------------------------------
 
@@ -599,6 +658,59 @@ func TestWebDAVBasePathWithSlash(t *testing.T) {
 			}
 		})
 	}
+}
+
+// -----------------------------------------------------------------------------
+// Diagnostics
+// -----------------------------------------------------------------------------
+
+func TestWebDAVDiagnostics(t *testing.T) {
+	t.Run("full config", func(t *testing.T) {
+		adapter := NewWebDAVAdapter(WebDAVConfig{
+			URL:      "https://dav.example.com/dav",
+			BasePath: "lt",
+			Username: "u",
+			Password: "pwd",
+		})
+		d := adapter.Diagnostics()
+		if d.URL != "https://dav.example.com/dav" {
+			t.Errorf("URL = %q, want %q", d.URL, "https://dav.example.com/dav")
+		}
+		if d.BasePath != "/lt/" {
+			t.Errorf("BasePath = %q, want %q", d.BasePath, "/lt/")
+		}
+		if d.FullProbeURL != "https://dav.example.com/dav/lt/lt_probe_DIAGNOSTIC.tmp" {
+			t.Errorf("FullProbeURL = %q, want %q", d.FullProbeURL, "https://dav.example.com/dav/lt/lt_probe_DIAGNOSTIC.tmp")
+		}
+		if !d.UsernameSet {
+			t.Errorf("UsernameSet = false, want true")
+		}
+		if d.PasswordLen != 3 {
+			t.Errorf("PasswordLen = %d, want 3", d.PasswordLen)
+		}
+	})
+
+	t.Run("empty username", func(t *testing.T) {
+		adapter := NewWebDAVAdapter(WebDAVConfig{
+			URL:      "https://dav.example.com",
+			BasePath: "",
+			Username: "",
+			Password: "",
+		})
+		d := adapter.Diagnostics()
+		if d.URL != "https://dav.example.com" {
+			t.Errorf("URL = %q, want %q", d.URL, "https://dav.example.com")
+		}
+		if d.BasePath != "/" {
+			t.Errorf("BasePath = %q, want %q", d.BasePath, "/")
+		}
+		if d.UsernameSet {
+			t.Errorf("UsernameSet = true, want false")
+		}
+		if d.PasswordLen != 0 {
+			t.Errorf("PasswordLen = %d, want 0", d.PasswordLen)
+		}
+	})
 }
 
 // TestWebDAVBackupRoundTrip_DefaultStylePrefix is the end-to-end guard for

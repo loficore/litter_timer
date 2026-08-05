@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"log/slog"
@@ -39,6 +40,24 @@ func (h *textHandler) WithGroup(name string) slog.Handler {
 	return h
 }
 
+func parseLogFile(prefix, name string) (int, bool) {
+	if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, ".log") {
+		return 0, false
+	}
+	middle := strings.TrimSuffix(name[len(prefix):], ".log")
+	if middle == "" {
+		return 0, true
+	}
+	if len(middle) < 2 || middle[0] != '.' {
+		return 0, false
+	}
+	n, err := strconv.Atoi(middle[1:])
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
+}
+
 func openLogDir(dir string) (*os.File, error) {
 	if dir == "" {
 		return os.Stderr, nil
@@ -46,45 +65,70 @@ func openLogDir(dir string) (*os.File, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, err
 	}
-	files, err := os.ReadDir(dir)
+
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(files, func(i, j int) bool {
-		info, err := files[i].Info()
-		if err != nil {
-			return true
+
+	t := time.Now()
+	prefix := t.Format("2006-01-02")
+	const maxSize = 10 * 1024 * 1024
+
+	var (
+		baseInfo         os.FileInfo
+		baseExists       bool
+		bestSuffix       int
+		bestSuffixExists bool
+		highestSuffix    int
+	)
+
+	for _, entry := range entries {
+		name := entry.Name()
+		suffix, ok := parseLogFile(prefix, name)
+		if !ok {
+			continue
 		}
-		infoJ, err := files[j].Info()
+		info, err := entry.Info()
 		if err != nil {
-			return false
+			continue
 		}
-		return info.Size() > infoJ.Size()
-	})
-	var tmpl *os.File
-	if len(files) > 0 {
-		tmpl, err = os.OpenFile(filepath.Join(dir, files[len(files)-1].Name()), os.O_WRONLY|os.O_APPEND, 0644)
-		if err != nil {
-			return nil, err
-		}
-		info, err := tmpl.Stat()
-		if err != nil {
-			return nil, err
-		}
-		if info.Size() > 10*1024*1024 {
-			tmpl.Close()
-			tmpl = nil
+		if suffix == 0 {
+			baseExists = true
+			baseInfo = info
+		} else {
+			if suffix > highestSuffix {
+				highestSuffix = suffix
+			}
+			if info.Size() <= maxSize && suffix > bestSuffix {
+				bestSuffix = suffix
+				bestSuffixExists = true
+			}
 		}
 	}
-	if tmpl == nil {
-		t := time.Now()
-		filename := filepath.Join(dir, t.Format("2006-01-02_15-04-05")+".log")
-		tmpl, err = os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
-		if err != nil {
-			return nil, err
-		}
+
+	// Preferred: base file under size cap.
+	if baseExists && baseInfo.Size() <= maxSize {
+		return os.OpenFile(filepath.Join(dir, prefix+".log"), os.O_WRONLY|os.O_APPEND, 0644)
 	}
-	return tmpl, nil
+
+	// Fallback: highest suffix file under size cap.
+	if bestSuffixExists {
+		return os.OpenFile(filepath.Join(dir, prefix+"."+strconv.Itoa(bestSuffix)+".log"), os.O_WRONLY|os.O_APPEND, 0644)
+	}
+
+	// Create new file.
+	var filename string
+	if !baseExists && highestSuffix == 0 {
+		filename = prefix + ".log"
+	} else {
+		next := highestSuffix + 1
+		if baseExists && next == 1 {
+			next = 2
+		}
+		filename = prefix + "." + strconv.Itoa(next) + ".log"
+	}
+	return os.OpenFile(filepath.Join(dir, filename), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 }
 
 func Init(logDir string) error {

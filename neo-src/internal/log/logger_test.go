@@ -21,7 +21,7 @@ func TestOpenLogDirRotation(t *testing.T) {
 	// Fixture (a): reopen-append when file < 10MB.
 	t.Run("reopen_append_small_file", func(t *testing.T) {
 		dir := t.TempDir()
-		seedName := "2026-08-02_15-04-05.log"
+		seedName := time.Now().Format("2006-01-02") + ".log"
 		seedPath := filepath.Join(dir, seedName)
 		if err := os.WriteFile(seedPath, make([]byte, 1024*1024), 0644); err != nil {
 			t.Fatal(err)
@@ -39,7 +39,7 @@ func TestOpenLogDirRotation(t *testing.T) {
 	// Fixture (b): rotate when file >= 10MB + 1 byte.
 	t.Run("rotate_large_file", func(t *testing.T) {
 		dir := t.TempDir()
-		seedName := "2026-08-02_15-04-05.log"
+		seedName := time.Now().Format("2006-01-02") + ".log"
 		seedPath := filepath.Join(dir, seedName)
 		// Create a sparse file at 10MB + 1 byte.
 		sf, err := os.Create(seedPath)
@@ -138,4 +138,214 @@ func searchString(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// --- Daily rotation tests (TDD red phase) ---
+
+func TestOpenLogDirDailyNaming(t *testing.T) {
+	dir := t.TempDir()
+	today := time.Now()
+	expectedName := today.Format("2006-01-02") + ".log"
+
+	f, err := openLogDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	got := filepath.Base(f.Name())
+	if got != expectedName {
+		t.Errorf("openLogDir(empty dir) created file %q, want %q", got, expectedName)
+	}
+}
+
+func TestOpenLogDirDailyReopen(t *testing.T) {
+	dir := t.TempDir()
+	today := time.Now()
+	yesterday := today.Add(-24 * time.Hour)
+
+	todayName := today.Format("2006-01-02") + ".log"
+	yesterdayName := yesterday.Format("2006-01-02") + ".log"
+
+	// Seed yesterday's file at 1MB — smaller than today's so old code picks it
+	if err := os.WriteFile(filepath.Join(dir, yesterdayName), make([]byte, 1024*1024), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Seed today's file at 1MB + 100 bytes — larger so old code prefers yesterday's
+	if err := os.WriteFile(filepath.Join(dir, todayName), make([]byte, 1024*1024+100), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := openLogDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	got := filepath.Base(f.Name())
+	if got != todayName {
+		t.Errorf("openLogDir re-opened %q, want today's file %q", got, todayName)
+	}
+}
+
+func TestOpenLogDirDailyRotate(t *testing.T) {
+	dir := t.TempDir()
+	today := time.Now()
+	yesterday := today.Add(-24 * time.Hour)
+
+	yesterdayName := yesterday.Format("2006-01-02") + ".log"
+	todayName := today.Format("2006-01-02") + ".log"
+
+	// Seed yesterday's file at 1MB
+	if err := os.WriteFile(filepath.Join(dir, yesterdayName), make([]byte, 1024*1024), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := openLogDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	got := filepath.Base(f.Name())
+	if got != todayName {
+		t.Errorf("openLogDir created %q, want today's date-based file %q", got, todayName)
+	}
+}
+
+func TestOpenLogDirDailySizeOverflow(t *testing.T) {
+	dir := t.TempDir()
+	today := time.Now()
+	prefix := today.Format("2006-01-02")
+	baseName := prefix + ".log"
+	expectedName := prefix + ".2.log"
+
+	// Create today's base file at 10MB + 1 byte
+	seedPath := filepath.Join(dir, baseName)
+	sf, err := os.Create(seedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sf.Seek(10*1024*1024, 0); err != nil {
+		sf.Close()
+		t.Fatal(err)
+	}
+	if _, err := sf.Write([]byte{0}); err != nil {
+		sf.Close()
+		t.Fatal(err)
+	}
+	sf.Close()
+
+	f, err := openLogDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	got := filepath.Base(f.Name())
+	if got != expectedName {
+		t.Errorf("openLogDir created %q, want overflow suffix file %q", got, expectedName)
+	}
+}
+
+func TestOpenLogDirDailyMultipleOverflow(t *testing.T) {
+	dir := t.TempDir()
+	today := time.Now()
+	prefix := today.Format("2006-01-02")
+	baseName := prefix + ".log"
+	suffix2Name := prefix + ".2.log"
+	expectedName := prefix + ".3.log"
+
+	// Create both base and .2.log at 10MB + 1
+	for _, name := range []string{baseName, suffix2Name} {
+		seedPath := filepath.Join(dir, name)
+		sf, err := os.Create(seedPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := sf.Seek(10*1024*1024, 0); err != nil {
+			sf.Close()
+			t.Fatal(err)
+		}
+		if _, err := sf.Write([]byte{0}); err != nil {
+			sf.Close()
+			t.Fatal(err)
+		}
+		sf.Close()
+	}
+
+	f, err := openLogDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	got := filepath.Base(f.Name())
+	if got != expectedName {
+		t.Errorf("openLogDir created %q, want next overflow suffix file %q", got, expectedName)
+	}
+}
+
+func TestOpenLogDirDailyBasePreferred(t *testing.T) {
+	dir := t.TempDir()
+	today := time.Now()
+	prefix := today.Format("2006-01-02")
+	baseName := prefix + ".log"
+	suffix2Name := prefix + ".2.log"
+
+	// Seed both base and .2.log: base at 1MB + 100 bytes (larger), .2.log at 1MB (smaller)
+	// Old code sorts by size descending, picks smallest (.2.log) — wrong behavior.
+	if err := os.WriteFile(filepath.Join(dir, baseName), make([]byte, 1024*1024+100), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, suffix2Name), make([]byte, 1024*1024), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := openLogDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	got := filepath.Base(f.Name())
+	if got != baseName {
+		t.Errorf("openLogDir opened %q, want base file %q (preferred when under cap)", got, baseName)
+	}
+}
+
+func TestOpenLogDirDailyIgnoresMalformed(t *testing.T) {
+	dir := t.TempDir()
+	today := time.Now()
+	prefix := today.Format("2006-01-02")
+	baseName := prefix + ".log"
+
+	// Create the valid base file at 1MB
+	if err := os.WriteFile(filepath.Join(dir, baseName), make([]byte, 1024*1024), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Malformed suffix (non-integer)
+	if err := os.WriteFile(filepath.Join(dir, prefix+".abc.log"), make([]byte, 1024), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Wrong extension
+	if err := os.WriteFile(filepath.Join(dir, prefix+".txt"), make([]byte, 1024), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Double extension (not .log)
+	if err := os.WriteFile(filepath.Join(dir, prefix+".log.bak"), make([]byte, 1024), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Must not panic and must return the valid base file.
+	f, err := openLogDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	got := filepath.Base(f.Name())
+	if got != baseName {
+		t.Errorf("openLogDir opened %q, want valid base file %q (malformed files ignored)", got, baseName)
+	}
 }

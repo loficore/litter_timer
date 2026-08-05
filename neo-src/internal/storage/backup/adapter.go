@@ -39,6 +39,8 @@ import (
 	"strings"
 	"time"
 
+	"little-timer/internal/log"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -267,74 +269,118 @@ type WebDAVAdapter struct {
 	client *http.Client
 }
 
+// WebDAVDiagnostics returns the adapter's resolved configuration
+// for pre-flight inspection (no HTTP request is made).
+type WebDAVDiagnostics struct {
+	URL          string // raw w.cfg.URL
+	BasePath     string // normalized: result of basePathWithSlash()
+	FullProbeURL string // template: joinURL(basePathWithSlash(), "lt_probe_DIAGNOSTIC.tmp")
+	UsernameSet  bool   // true if w.cfg.Username != ""
+	PasswordLen  int    // 0 if !UsernameSet, else len(w.cfg.Password)
+}
+
 func (w *WebDAVAdapter) Target() BackupTarget { return TargetWebDAV }
+
+// Diagnostics returns a snapshot of the adapter's resolved configuration
+// suitable for pre-flight inspection.  No HTTP request is made.
+func (w *WebDAVAdapter) Diagnostics() WebDAVDiagnostics {
+	bp := w.basePathWithSlash()
+	return WebDAVDiagnostics{
+		URL:          w.cfg.URL,
+		BasePath:     bp,
+		FullProbeURL: w.joinURL(bp, "lt_probe_DIAGNOSTIC.tmp"),
+		UsernameSet:  w.cfg.Username != "",
+		PasswordLen:  func() int { if w.cfg.Username != "" { return len(w.cfg.Password) }; return 0 }(),
+	}
+}
 
 // TestConnection performs a PUT-probe -> GET-verify -> DELETE-cleanup
 // write cycle on the base path to confirm the WebDAV server is writable.
 func (w *WebDAVAdapter) TestConnection() error {
+	authStatus := "none"
+	if w.cfg.Username != "" {
+		authStatus = "basic"
+	}
+
 	probeName := fmt.Sprintf("lt_probe_%d.tmp", time.Now().UnixNano())
 	probeURL := w.joinURL(w.basePathWithSlash(), probeName)
 	probeContent := []byte("lt-probe-ok")
 
+	log.Debug("webdav probe", "url", probeURL)
+
 	putReq, err := http.NewRequest(http.MethodPut, probeURL, bytes.NewReader(probeContent))
 	if err != nil {
-		return fmt.Errorf("%w: build PUT probe: %v", ErrConnectionFailed, err)
+		return fmt.Errorf("%w: build PUT probe (auth=%s, body=%q): %v", ErrConnectionFailed, authStatus, "", err)
 	}
 	putReq.Header.Set("Content-Type", "application/octet-stream")
 	w.applyAuth(putReq)
+	log.Debug("webdav put", "url", probeURL, "auth", authStatus)
 	putResp, err := w.client.Do(putReq)
 	if err != nil {
-		return fmt.Errorf("%w: PUT probe: %v", ErrConnectionFailed, err)
+		return fmt.Errorf("%w: PUT %s -> (auth=%s, body=%q): %v", ErrConnectionFailed, probeURL, authStatus, "", err)
 	}
+
+	b, _ := io.ReadAll(io.LimitReader(putResp.Body, 500))
 	putResp.Body.Close()
+	body := string(b)
+
+	log.Debug("webdav put response", "status", putResp.StatusCode)
+
 	if putResp.StatusCode == http.StatusUnauthorized {
 		_ = w.deleteProbe(probeURL)
-		return fmt.Errorf("%w: PUT probe status %d", ErrAuthenticationFail, putResp.StatusCode)
+		return fmt.Errorf("%w: PUT %s -> %d (auth=%s, body=%q)", ErrAuthenticationFail, probeURL, putResp.StatusCode, authStatus, body)
 	}
 	if putResp.StatusCode == http.StatusForbidden {
 		_ = w.deleteProbe(probeURL)
-		return fmt.Errorf("%w: PUT probe status %d", ErrPermissionDenied, putResp.StatusCode)
+		return fmt.Errorf("%w: PUT %s -> %d (auth=%s, body=%q)", ErrPermissionDenied, probeURL, putResp.StatusCode, authStatus, body)
 	}
 	if putResp.StatusCode >= 300 {
 		_ = w.deleteProbe(probeURL)
-		return fmt.Errorf("%w: PUT probe status %d", ErrConnectionFailed, putResp.StatusCode)
+		return fmt.Errorf("%w: PUT %s -> %d (auth=%s, body=%q)", ErrConnectionFailed, probeURL, putResp.StatusCode, authStatus, body)
 	}
 
 	getReq, err := http.NewRequest(http.MethodGet, probeURL, nil)
 	if err != nil {
 		_ = w.deleteProbe(probeURL)
-		return fmt.Errorf("%w: build GET probe: %v", ErrConnectionFailed, err)
+		return fmt.Errorf("%w: build GET probe (auth=%s, body=%q): %v", ErrConnectionFailed, authStatus, "", err)
 	}
 	w.applyAuth(getReq)
 	getResp, err := w.client.Do(getReq)
 	if err != nil {
 		_ = w.deleteProbe(probeURL)
-		return fmt.Errorf("%w: GET probe: %v", ErrConnectionFailed, err)
+		return fmt.Errorf("%w: GET %s -> (auth=%s, body=%q): %v", ErrConnectionFailed, probeURL, authStatus, "", err)
 	}
+
+	log.Debug("webdav get response", "status", getResp.StatusCode)
+
 	if getResp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(getResp.Body, 500))
 		getResp.Body.Close()
+		body := string(b)
 		_ = w.deleteProbe(probeURL)
 		if getResp.StatusCode == http.StatusUnauthorized {
-			return fmt.Errorf("%w: GET probe status %d", ErrAuthenticationFail, getResp.StatusCode)
+			return fmt.Errorf("%w: GET %s -> %d (auth=%s, body=%q)", ErrAuthenticationFail, probeURL, getResp.StatusCode, authStatus, body)
 		}
 		if getResp.StatusCode == http.StatusForbidden {
-			return fmt.Errorf("%w: GET probe status %d", ErrPermissionDenied, getResp.StatusCode)
+			return fmt.Errorf("%w: GET %s -> %d (auth=%s, body=%q)", ErrPermissionDenied, probeURL, getResp.StatusCode, authStatus, body)
 		}
-		return fmt.Errorf("%w: GET probe status %d", ErrConnectionFailed, getResp.StatusCode)
+		return fmt.Errorf("%w: GET %s -> %d (auth=%s, body=%q)", ErrConnectionFailed, probeURL, getResp.StatusCode, authStatus, body)
 	}
 	got, err := io.ReadAll(getResp.Body)
 	getResp.Body.Close()
 	if err != nil {
 		_ = w.deleteProbe(probeURL)
-		return fmt.Errorf("%w: read GET probe: %v", ErrConnectionFailed, err)
+		return fmt.Errorf("%w: read GET probe (auth=%s, body=%q): %v", ErrConnectionFailed, authStatus, "<read error>", err)
 	}
 	if !bytes.Equal(got, probeContent) {
 		_ = w.deleteProbe(probeURL)
-		return fmt.Errorf("%w: probe content mismatch", ErrConnectionFailed)
+		return fmt.Errorf("%w: probe content mismatch (auth=%s, body=%q)", ErrConnectionFailed, authStatus, "")
 	}
 
+	log.Debug("webdav probe cleanup", "url", probeURL)
+
 	if err := w.deleteProbe(probeURL); err != nil {
-		return fmt.Errorf("%w: DELETE probe: %v", ErrConnectionFailed, err)
+		return fmt.Errorf("%w: DELETE %s -> (auth=%s, body=%q): %v", ErrConnectionFailed, probeURL, authStatus, "", err)
 	}
 	return nil
 }
@@ -579,6 +625,9 @@ func (w *WebDAVAdapter) joinURL(basePath, name string) string {
 func (w *WebDAVAdapter) applyAuth(req *http.Request) {
 	if w.cfg.Username != "" {
 		req.SetBasicAuth(w.cfg.Username, w.cfg.Password)
+		log.Debug("webdav auth", "username", w.cfg.Username, "password_len", len(w.cfg.Password))
+	} else {
+		log.Debug("webdav auth skipped", "reason", "username empty")
 	}
 }
 
