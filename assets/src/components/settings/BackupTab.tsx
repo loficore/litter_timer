@@ -95,21 +95,22 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
     return false;
   };
 
-  const getBackupErrorText = (code: string | undefined): string | null => {
-    if (!code) return null;
-    const map: Record<string, string> = {
-      'FileNotFound': '',
-      'BackupFailed': '',
-      'NetworkError': t("backup.network_error"),
-      'ConnectionFailed': t("backup.connection_failed"),
-      'AuthenticationFailed': t("backup.authentication_failed"),
-      'PermissionDenied': t("backup.permission_denied"),
-    };
-    if (code in map) {
-      const text = map[code];
-      return text || null;
+  const getBackupErrorText = (error: string | undefined): string | null => {
+    if (!error) return null;
+    const lower = error.toLowerCase();
+    if (lower.includes("authentication failed")) {
+      return t("backup.authentication_failed");
     }
-    return code;
+    if (lower.includes("permission denied")) {
+      return t("backup.permission_denied");
+    }
+    if (lower.includes("network error") || lower.includes("network")) {
+      return t("backup.network_error");
+    }
+    if (lower.includes("connection failed") || lower.includes("connection")) {
+      return t("backup.connection_failed");
+    }
+    return error;
   };
 
   const loadBackups = async () => {

@@ -80,12 +80,12 @@ describe("BackupTab", () => {
   });
 
   it("shows error message when loadBackups fails", async () => {
-    mockApiClient.listBackups.mockResolvedValue({ success: false, error: "Network error" });
+    mockApiClient.listBackups.mockResolvedValue({ success: false, error: "network error: GET https://example.com -> timeout" });
 
     render(<BackupTab config={{}} onChange={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText("Network error")).toBeTruthy();
+      expect(screen.getByText("网络连接失败，请检查网络后重试")).toBeTruthy();
     });
   });
 
