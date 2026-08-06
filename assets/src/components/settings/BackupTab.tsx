@@ -2,6 +2,7 @@ import type { FunctionalComponent } from "preact";
 import { useState, useEffect } from "preact/hooks";
 import { t } from "../../utils/i18n";
 import { getAPIClient } from "../../utils/apiClientSingleton";
+import { showToast } from "../common/Toast";
 import type { BackupConfig } from "../../types/api";
 import { MasterPasswordModal } from "../MasterPasswordModal";
 
@@ -118,7 +119,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
     try {
       const result = await apiClient.listBackups();
       if (result.success) {
-        setBackups(result.backups);
+        setBackups(result.backups ?? []);
       } else if (result.error) {
         const friendly = getBackupErrorText(result.error);
         if (friendly) {
@@ -139,7 +140,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
     try {
       const result = await apiClient.createBackup();
       if (result.success) {
-        showMessage('success', t("backup.created_at", { path: result.backup_path }));
+        showToast(t("backup.created_at", { path: result.backup_path }), 'success');
         await loadBackups();
       } else {
         if (!handleApiError(result)) {
@@ -163,7 +164,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
     try {
       const result = await apiClient.restoreBackup(name);
       if (result.success) {
-        showMessage('success', t("backup.restore_success"));
+        showToast(t("backup.restore_success"), 'success');
       } else {
         if (!handleApiError(result)) {
           showMessage('error', result.error || t("backup.restore_failed"));
@@ -184,7 +185,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
     try {
       const result = await apiClient.deleteBackup(name);
       if (result.success) {
-        showMessage('success', t("backup.delete_success"));
+        showToast(t("backup.delete_success"), 'success');
         await loadBackups();
       } else {
         showMessage('error', result.error || t("backup.delete_failed"));
@@ -201,7 +202,7 @@ export const BackupTab: FunctionalComponent<BackupTabProps> = ({ config, onChang
     try {
       const result = await apiClient.verifyBackup();
       if (result.success) {
-        showMessage('success', t("backup.verify_success"));
+        showToast(t("backup.verify_success"), 'success');
       } else {
         showMessage('error', result.error || t("backup.verify_failed"));
       }

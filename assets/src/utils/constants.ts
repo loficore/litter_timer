@@ -21,7 +21,7 @@ export const STORAGE_KEYS = {
 } as const;
 
 // API 默认 URL
-export const DEFAULT_API_URL = "http://localhost:8080";
+export const DEFAULT_API_URL = "http://localhost:8013";
 
 // 布局密度选项
 export type LayoutDensity = "compact" | "normal" | "spacious";

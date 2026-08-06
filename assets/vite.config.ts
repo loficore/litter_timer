@@ -4,6 +4,9 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
 import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 
+const backendPort = process.env.BACKEND_PORT
+const backendUrl = backendPort ? `http://localhost:${backendPort}` : 'http://localhost:8013'
+
 // Vite plugin: intercept /wails/runtime.js imports and redirect to a stub.
 // This lets the auto-generated binding files work in Vite dev mode without modification.
 // On Android / Wails builds the real runtime is injected by the platform.
@@ -19,6 +22,7 @@ function wailsRuntimeStub(): Plugin {
 }
 
 export default defineConfig({
+  ...(backendPort ? { define: { 'import.meta.env.VITE_API_URL': JSON.stringify(backendUrl) } } : {}),
   build: {
     assetsInlineLimit: Number.MAX_SAFE_INTEGER,
     rollupOptions: {
@@ -43,7 +47,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: backendUrl,
         changeOrigin: true,
       },
     },

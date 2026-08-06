@@ -63,6 +63,17 @@ go-dev:
         set -e
         trap 'kill $VITE_PID $GO_PID 2>/dev/null; exit 0' INT TERM
 
+        find_available_port() {
+            local port=$1
+            while ss -tlnp | grep -q ":${port} "; do
+                port=$((port + 1))
+            done
+            echo "$port"
+        }
+
+        GO_PORT=$(find_available_port 8013)
+        export BACKEND_PORT=$GO_PORT
+
         echo "=== 启动前端 Dev Server ==="
         cd assets && pnpm run dev &
         VITE_PID=$!
@@ -71,13 +82,13 @@ go-dev:
         sleep 3
 
         echo "=== 启动 Go 后端 ==="
-        cd {{go_src}} && go build -o bin/server ./cmd/server && bin/server serve --http-only 2>&1 &
+        cd {{go_src}} && go build -o bin/server ./cmd/server && bin/server serve --http-only --port $GO_PORT 2>&1 &
         GO_PID=$!
 
         echo ""
         echo "=== 服务已启动 ==="
         echo "前端: http://localhost:5173"
-        echo "Go API: http://localhost:8080"
+        echo "Go API: http://localhost:$GO_PORT"
         echo ""
         echo "按 Ctrl+C 停止所有服务"
         wait
@@ -87,6 +98,17 @@ go-dev-webview:
         set -e
         trap 'kill $VITE_PID $GO_PID 2>/dev/null; exit 0' INT TERM
 
+        find_available_port() {
+            local port=$1
+            while ss -tlnp | grep -q ":${port} "; do
+                port=$((port + 1))
+            done
+            echo "$port"
+        }
+
+        GO_PORT=$(find_available_port 8013)
+        export BACKEND_PORT=$GO_PORT
+
         echo "=== 启动前端 Dev Server ==="
         cd assets && pnpm run dev &
         VITE_PID=$!
@@ -95,13 +117,13 @@ go-dev-webview:
         sleep 3
 
         echo "=== 启动 Go 后端 (webview) ==="
-        cd {{go_src}} && go build -o bin/server ./cmd/server && bin/server serve --webview &
+        cd {{go_src}} && go build -o bin/server ./cmd/server && bin/server serve --webview --port $GO_PORT &
         GO_PID=$!
 
         echo ""
         echo "=== 服务已启动 ==="
         echo "前端: http://localhost:5173"
-        echo "Go API + WebView: http://localhost:8080"
+        echo "Go API + WebView: http://localhost:$GO_PORT"
         echo ""
         echo "按 Ctrl+C 停止所有服务"
         wait

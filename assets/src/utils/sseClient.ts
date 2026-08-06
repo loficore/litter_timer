@@ -17,12 +17,14 @@ export class SSEClient {
     private onError: ErrorCallback | null = null;
     private onConnect: ConnectCallback | null = null;
     private closed = false;
+    private baseUrl: string;
 
     /**
      * 构造函数，接受 SSE 服务器的基础 URL
-     * @param {string} baseUrl SSE 服务器的基础 URL，例如 http://localhost:8000
+     * @param {string} baseUrl SSE 服务器的基础 URL，例如 http://localhost:8013
      */
-    constructor(_baseUrl: string) {
+    constructor(baseUrl: string) {
+        this.baseUrl = baseUrl;
     }
 
     /**
@@ -39,12 +41,11 @@ export class SSEClient {
     }
 
     private createConnection(): void {
-        // SSE uses a direct connection to the Go backend at :8080, bypassing
-        // the Vite proxy (which does not handle EventSource upgrade requests).
-        // In all environments (dev, test, production) the Go server SSE endpoint
-        // is at :8080/api/events. The frontend HTTP API calls correctly use the
-        // proxy (window.location.origin), but SSE must connect directly.
-        this.eventSource = new EventSource(`http://localhost:8080/api/events`);
+        // SSE bypasses the Vite proxy (EventSource doesn't support upgrade).
+        // In dev mode, VITE_API_URL points directly to the Go backend.
+        // In production (WebView), window.location.origin serves both API and SSE.
+        const sseBase = import.meta.env.VITE_API_URL || this.baseUrl;
+        this.eventSource = new EventSource(`${sseBase}/api/events`);
 
         this.eventSource.onopen = () => {
             logInfo('SSE connection opened');
