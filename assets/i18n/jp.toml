@@ -185,6 +185,12 @@ infinity = "∞"
 habit_completed = "習慣完了"
 habit_completed_body = "{name}の目標を完了しました！"
 
+[toast]
+timer_finished = "計時完了"
+timer_finished_body = "{elapsed}集中しました。少し休憩しましょう！"
+habit_completed = "習慣を完了しました"
+habit_completed_body = "{name}の習慣目標を完了しました！"
+
 [connection]
 disconnected = "接続が切れました - 再接続中..."
 reconnecting = "再接続中..."

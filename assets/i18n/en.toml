@@ -203,6 +203,12 @@ infinity = "∞"
 habit_completed = "Habit completed"
 habit_completed_body = "You completed your goal for {name}!"
 
+[toast]
+timer_finished = "Timer finished"
+timer_finished_body = "You've focused for {elapsed} — time to take a break!"
+habit_completed = "Habit completed"
+habit_completed_body = "You completed your habit goal for {name}!"
+
 [connection]
 disconnected = "Connection lost - Reconnecting..."
 reconnecting = "Reconnecting..."

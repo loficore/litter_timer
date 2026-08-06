@@ -188,6 +188,12 @@ total = "总计"
 habit_completed = "习惯完成"
 habit_completed_body = "你已完成 {name} 的目标！"
 
+[toast]
+timer_finished = "计时完成"
+timer_finished_body = "你已经专注了 {elapsed}，该休息一下了！"
+habit_completed = "习惯已完成"
+habit_completed_body = "你已完成 {name} 的习惯目标！"
+
 [connection]
 disconnected = "连接中断 - 正在重连..."
 reconnecting = "正在重新连接..."

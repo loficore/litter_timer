@@ -17,6 +17,8 @@ import { useSSE } from "./hooks/useSSE";
 import { useFinishTransition } from "./hooks/useFinishTransition";
 import { useTimer } from "./hooks/useTimer";
 import type { TimerMode } from "./hooks/useTimer";
+import { showToast } from "./components/common/Toast";
+import { vibrateForToast } from "./utils/vibrate";
 
 interface TimerPageProps {
     onHabitsClick?: () => void;
@@ -46,9 +48,12 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
     });
 
     const sessionRecordedRef = useRef(false);
+    const autoRecordTriggeredRef = useRef(false);
     const apiClientRef = useRef(getAPIClient());
     const previousFinishedRef = useRef(false);
     const initialDataLoadedRef = useRef(false);
+    const timerDisplayRef = useRef<HTMLDivElement | null>(null);
+    const finishFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const {
         timerConfig,
@@ -149,15 +154,36 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
     useEffect(() => {
         if (isFinished && !previousFinishedRef.current) {
             audioEngine.playFinish();
+            showToast(t("toast.timer_finished"), "success");
+            vibrateForToast("timer-finish");
+
+            const timerDisplay = timerDisplayRef.current;
+            if (timerDisplay) {
+                timerDisplay.classList.add("toast-timer-flash");
+                if (finishFlashTimeoutRef.current !== null) {
+                    clearTimeout(finishFlashTimeoutRef.current);
+                }
+                finishFlashTimeoutRef.current = setTimeout(() => {
+                    timerDisplay.classList.remove("toast-timer-flash");
+                    finishFlashTimeoutRef.current = null;
+                }, 900);
+            }
         }
         previousFinishedRef.current = isFinished;
     }, [isFinished]);
 
+    useEffect(() => () => {
+        if (finishFlashTimeoutRef.current !== null) {
+            clearTimeout(finishFlashTimeoutRef.current);
+        }
+        timerDisplayRef.current?.classList.remove("toast-timer-flash");
+    }, []);
+
     useEffect(() => {
-        if (timerConfig.mode === "stopwatch" && habitDetail && elapsedSeconds > 0 && !sessionRecordedRef.current) {
+        if (timerConfig.mode === "stopwatch" && habitDetail && elapsedSeconds > 0 && !autoRecordTriggeredRef.current) {
             const totalTodaySeconds = habitDetail.today_seconds + elapsedSeconds;
             if (totalTodaySeconds >= habitDetail.goal_seconds) {
-                sessionRecordedRef.current = true;
+                autoRecordTriggeredRef.current = true;
                 void finish().then(() => {
                     void reset();
                     void recordSession();
@@ -220,6 +246,8 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
         try {
             await apiClientRef.current.createSession(habitId, totalSeconds, 1, today);
             logSuccess("✓ Session 已自动记录");
+            showToast(t("toast.habit_completed"), "success");
+            sessionRecordedRef.current = true;
             void loadHabitDetail(habitId);
         } catch (e) {
             logError(`记录 session 失败: ${e}`);
@@ -256,6 +284,7 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
             await reset();
         }
 
+        autoRecordTriggeredRef.current = false;
         await start(selectedHabitId ?? undefined);
         audioEngine.playTick();
     };
@@ -312,6 +341,7 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
         audioEngine.stopTick();
         void reset();
         sessionRecordedRef.current = false;
+        autoRecordTriggeredRef.current = false;
 
         setSelectedHabitId(habitId);
         setShowHabitPicker(false);
@@ -408,7 +438,7 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
                 />
 
                 <div className="flex flex-1 flex-col items-center justify-center">
-                <div data-testid="timer-display" className="my-clock-glass mb-3 sm:mb-4">
+                <div ref={timerDisplayRef} data-testid="timer-display" className="my-clock-glass mb-3 sm:mb-4">
                                     <div className={`text-[clamp(2.8rem,14vw,8rem)] leading-none font-mono font-semibold time-transition flex items-center justify-center ${timeDisplayStyle === "seven_segment" ? "time-style-seven-segment" : "time-style-classic"} ${timeStateClass} ${isRunning && timeDisplayStyle === "seven_segment" ? "time-running-segment" : ""}`}>
                        {timeDisplayStyle === "seven_segment" ? (
                             <SevenSegmentDisplay value={timeDisplay} />

@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from "preact/hooks";
+import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { Sidebar } from "./components/Sidebar";
 import { TimerPage } from "./TimerPage";
 import { HabitsPage } from "./HabitsPage";
 import { SettingsPage } from "./Settings.tsx";
 import { StatsPage } from "./Stats.tsx";
-import { ErrorNotification } from "./components/ErrorNotification.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ToastContainer, showToast } from "./components/common/Toast";
 import { getFrontendLogLevel, isPerfDebugEnabled, isWebViewRuntime, logError, logLifecycle, logPerf } from "./utils/logger";
 import { useAppSettings, logWallpaperDebug } from "./hooks/useAppSettings";
 import { resolveWallpaperUrl } from "./utils/constants";
@@ -31,6 +31,7 @@ export const App = () => {
   const [page, setPage] = useState<Page>("timer");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { settings, normalizeWallpaper, updateSettings } = useAppSettings();
+  const previousErrorToastRef = useRef<string | null>(null);
 
   const navigateTo = (newPage: Page) => {
     setPage(newPage);
@@ -52,6 +53,7 @@ export const App = () => {
     window.onerror = (message, _source, _lineno, _colno, error) => {
       const text = formatUnknownError(message);
       logError(`全局错误: ${text}`, error);
+      setErrorMessage(text);
       return false;
     };
 
@@ -59,6 +61,7 @@ export const App = () => {
       const reasonText = formatUnknownError(event.reason);
       const reasonError = event.reason instanceof Error ? event.reason : undefined;
       logError(`未处理的 Promise 拒绝: ${reasonText}`, reasonError);
+      setErrorMessage(reasonText);
     };
 
     logLifecycle("WebView 已渲染完成");
@@ -120,14 +123,26 @@ export const App = () => {
     updateSettings({ wallpaper: normalized });
   }, [normalizeWallpaper, updateSettings]);
 
+  const handlePageError = useCallback((error: Error) => {
+    setErrorMessage(error.message || "未知错误");
+  }, []);
+
+  useEffect(() => {
+    if (!errorMessage) {
+      previousErrorToastRef.current = null;
+      return;
+    }
+
+    if (previousErrorToastRef.current === errorMessage) {
+      return;
+    }
+
+    previousErrorToastRef.current = errorMessage;
+    showToast(errorMessage, "error");
+  }, [errorMessage]);
+
   return (
     <>
-      <ErrorNotification
-        visible={!!errorMessage}
-        message={errorMessage || undefined}
-        onDismiss={() => setErrorMessage(null)}
-      />
-
       <div className="flex h-screen bg-transparent">
         {/* 侧边栏 - 桌面端 */}
         <div className="hidden lg:block lg:flex shrink-0">
@@ -136,7 +151,7 @@ export const App = () => {
 
         {/* 主内容区 */}
         <main className="flex-1 flex flex-col overflow-hidden pb-20 lg:pb-0">
-          <ErrorBoundary>
+          <ErrorBoundary onError={handlePageError}>
             <div className={page === "timer" ? "flex-1" : "hidden"}>
               <TimerPage
                 onHabitsClick={() => navigateTo("habits")}
@@ -161,6 +176,8 @@ export const App = () => {
           </ErrorBoundary>
         </main>
       </div>
+
+      <ToastContainer />
 
       {/* 底部导航 - 移动端 */}
       <nav
