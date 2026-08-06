@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/preact";
+import type { ComponentChildren } from "preact";
 import { App } from "../App";
+
+const mocks = vi.hoisted(() => ({
+  showToastMock: vi.fn(),
+}));
 
 vi.mock("../utils/apiClientSingleton", () => ({
   getAPIClient: vi.fn(() => ({
@@ -76,9 +81,18 @@ vi.mock("../Settings", () => ({
   ),
 }));
 
-vi.mock("../components/ErrorNotification", () => ({
-  ErrorNotification: ({ visible }: { visible: boolean }) =>
-    visible ? <div data-testid="error-notification">Error</div> : null,
+vi.mock("../components/ErrorBoundary", () => ({
+  ErrorBoundary: ({ children, onError }: { children: ComponentChildren; onError?: (error: Error) => void }) => (
+    <div data-testid="error-boundary">
+      <button type="button" onClick={() => onError?.(new Error("boom"))}>trigger-error</button>
+      {children}
+    </div>
+  ),
+}));
+
+vi.mock("../components/common/Toast", () => ({
+  ToastContainer: () => <div data-testid="toast-container" />,
+  showToast: mocks.showToastMock,
 }));
 
 describe("App", () => {
@@ -171,6 +185,20 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByTestId("habits-page")).toBeTruthy();
     });
+  });
+
+  it("错误消息变化时应发出错误 toast，重复相同消息不重复发 toast", async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByText("trigger-error"));
+
+    await waitFor(() => {
+      expect(mocks.showToastMock).toHaveBeenCalledWith("boom", "error");
+    });
+
+    fireEvent.click(screen.getByText("trigger-error"));
+
+    expect(mocks.showToastMock).toHaveBeenCalledTimes(1);
   });
 
   it("HabitsPage 的 onSettingsClick 应该导航到设置页面", async () => {

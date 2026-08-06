@@ -3,6 +3,10 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/preact";
 import { BackupTab } from "../../../components/settings/BackupTab";
 import { t } from "../../../utils/i18n";
 
+const mocks = vi.hoisted(() => ({
+  showToastMock: vi.fn(),
+}));
+
 vi.mock("../../../utils/apiClientSingleton", () => ({
   getAPIClient: vi.fn(),
 }));
@@ -18,6 +22,10 @@ vi.mock("../../../components/MasterPasswordModal", () => ({
       </div>
     );
   },
+}));
+
+vi.mock("../../../components/common/Toast", () => ({
+  showToast: mocks.showToastMock,
 }));
 
 import { getAPIClient } from "../../../utils/apiClientSingleton";
@@ -167,7 +175,7 @@ describe("BackupTab", () => {
     fireEvent.click(createButton);
 
     await waitFor(() => {
-      expect(screen.getByText(t("backup.created_at", { path: "/tmp/backup.db" }))).toBeTruthy();
+      expect(mocks.showToastMock).toHaveBeenCalledWith(t("backup.created_at", { path: "/tmp/backup.db" }), 'success');
     });
   });
 
@@ -332,7 +340,7 @@ describe("BackupTab", () => {
     fireEvent.click(verifyButton);
 
     await waitFor(() => {
-      expect(screen.getByText(t("backup.verify_success"))).toBeTruthy();
+      expect(mocks.showToastMock).toHaveBeenCalledWith(t("backup.verify_success"), 'success');
     });
   });
 

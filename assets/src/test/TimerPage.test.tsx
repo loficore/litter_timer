@@ -2,11 +2,32 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/preact";
 import { TimerPage } from "../TimerPage";
 
+const mocks = vi.hoisted(() => ({
+  showToastMock: vi.fn(),
+  vibrateForToastMock: vi.fn(),
+  playFinishMock: vi.fn(),
+  timerState: { isFinished: false },
+  finishMock: vi.fn().mockResolvedValue({ elapsed_seconds: 123 }),
+  resetMock: vi.fn().mockResolvedValue(undefined),
+  startMock: vi.fn().mockResolvedValue(undefined),
+  pauseMock: vi.fn().mockResolvedValue(undefined),
+  resumeMock: vi.fn().mockResolvedValue(undefined),
+  skipToNextMock: vi.fn(),
+  createSessionMock: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../utils/apiClientSingleton", () => ({
   getAPIClient: vi.fn(() => ({
-    getHabitSets: vi.fn().mockResolvedValue([]),
-    getHabits: vi.fn().mockResolvedValue([]),
-    getHabitDetail: vi.fn().mockResolvedValue(null),
+    getHabitSets: vi.fn().mockResolvedValue([{ id: 1, name: "Reading" }]),
+    getHabits: vi.fn().mockResolvedValue([
+      { id: 7, set_id: 1, name: "Read 10 pages", color: "#ff0000", goal_seconds: 100 },
+    ]),
+    getHabitDetail: vi.fn().mockResolvedValue({
+      habit_id: 7,
+      today_seconds: 0,
+      goal_seconds: 100,
+    }),
+    createSession: mocks.createSessionMock,
     startTimer: vi.fn().mockResolvedValue({}),
     pauseTimer: vi.fn().mockResolvedValue({}),
     resetTimer: vi.fn().mockResolvedValue({}),
@@ -31,7 +52,7 @@ vi.mock("../utils/audio", () => ({
     unlock: vi.fn(),
     playTick: vi.fn(),
     stopTick: vi.fn(),
-    playFinish: vi.fn(),
+    playFinish: mocks.playFinishMock,
   },
   loadAudioPreferences: vi.fn(() => ({
     sound_enabled: true,
@@ -44,7 +65,33 @@ vi.mock("../utils/audio", () => ({
 vi.mock("../hooks/useSSE", () => ({
   useSSE: vi.fn(() => ({
     isConnected: false,
-    lastMessage: null,
+    lastState: null,
+  })),
+}));
+
+vi.mock("../hooks/useTimer", () => ({
+  useTimer: vi.fn(() => ({
+    timerConfig: {
+      mode: "stopwatch",
+      workDuration: 1500,
+      restDuration: 300,
+      loopCount: 0,
+    },
+    setTimerConfig: vi.fn(),
+    isRunning: false,
+    isPaused: false,
+    isFinished: mocks.timerState.isFinished,
+    isResting: false,
+    currentRound: 1,
+    elapsedSeconds: 123,
+    remainingSeconds: 1500,
+    displayTime: "02:03",
+    start: mocks.startMock,
+    pause: mocks.pauseMock,
+    resume: mocks.resumeMock,
+    reset: mocks.resetMock,
+    skipToNext: mocks.skipToNextMock,
+    finish: mocks.finishMock,
   })),
 }));
 
@@ -82,6 +129,7 @@ vi.mock("../utils/i18n", () => ({
       "timer.goal": "Goal",
       "timer.progress": "Progress",
       "habit.no_habits": "No habits yet",
+      "toast.timer_finished": "Timer finished",
     };
     let result = translations[key] || key;
     if (params) {
@@ -93,9 +141,18 @@ vi.mock("../utils/i18n", () => ({
   },
 }));
 
+vi.mock("../components/common/Toast", () => ({
+  showToast: mocks.showToastMock,
+}));
+
+vi.mock("../utils/vibrate", () => ({
+  vibrateForToast: mocks.vibrateForToastMock,
+}));
+
 describe("TimerPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.timerState.isFinished = false;
   });
 
   it("应该渲染计时页面", () => {
@@ -113,7 +170,7 @@ describe("TimerPage", () => {
     render(<TimerPage onHabitsClick={onHabitsClick} />);
 
     const buttons = screen.getAllByRole("button");
-    const iconButton = buttons.find(btn => btn.querySelector('svg'));
+    const iconButton = buttons.find((btn) => btn.querySelector("svg"));
     if (iconButton) {
       fireEvent.click(iconButton);
       expect(onHabitsClick).toHaveBeenCalled();
@@ -121,7 +178,6 @@ describe("TimerPage", () => {
   });
 
   it.skip("时间格式应该正确显示", () => {
-    // dolphin: disabled - component renders format split into spans, runtime mock behavior
     render(<TimerPage />);
     expect(screen.getByText("00")).toBeTruthy();
     expect(screen.getByText(":")).toBeTruthy();
@@ -135,5 +191,61 @@ describe("TimerPage", () => {
   it("应该显示选择习惯按钮", () => {
     render(<TimerPage />);
     expect(screen.getAllByText("Select Habit").length).toBeGreaterThan(0);
+  });
+
+  it("在完成边缘应播放 finish 音频、toast、vibrate，并给时间显示加闪烁类", async () => {
+    const { container, rerender } = render(<TimerPage />);
+    const timerDisplay = container.querySelector('[data-testid="timer-display"]');
+
+    expect(timerDisplay?.classList.contains("toast-timer-flash")).toBe(false);
+
+    mocks.timerState.isFinished = true;
+    rerender(<TimerPage />);
+
+    await waitFor(() => {
+      expect(mocks.playFinishMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mocks.showToastMock).toHaveBeenCalledWith("Timer finished", "success");
+    expect(mocks.vibrateForToastMock).toHaveBeenCalledWith("timer-finish");
+    expect(timerDisplay?.classList.contains("toast-timer-flash")).toBe(true);
+
+    mocks.timerState.isFinished = true;
+    rerender(<TimerPage />);
+
+    expect(mocks.playFinishMock).toHaveBeenCalledTimes(1);
+    expect(mocks.showToastMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("完成边缘只会触发一次 toast 和 vibration，即使组件再次渲染且 finished 保持为真", async () => {
+    const { rerender } = render(<TimerPage />);
+
+    mocks.timerState.isFinished = true;
+    rerender(<TimerPage />);
+
+    await waitFor(() => {
+      expect(mocks.showToastMock).toHaveBeenCalledTimes(1);
+      expect(mocks.vibrateForToastMock).toHaveBeenCalledWith("timer-finish");
+    });
+
+    rerender(<TimerPage />);
+
+    expect(mocks.showToastMock).toHaveBeenCalledTimes(1);
+    expect(mocks.vibrateForToastMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("习惯目标达成时应记录 session 并显示习惯完成 toast", async () => {
+    render(<TimerPage />);
+
+    fireEvent.click(screen.getByTestId("timer-habit-picker"));
+    fireEvent.click(await screen.findByTestId("habit-option-7"));
+
+    fireEvent.click(screen.getByTestId("timer-start"));
+
+    await waitFor(() => {
+      expect(mocks.createSessionMock).toHaveBeenCalledWith(7, 123, 1, expect.any(String));
+    });
+
+    expect(mocks.showToastMock).toHaveBeenCalledWith("toast.habit_completed", "success");
   });
 });
