@@ -9,15 +9,16 @@
 //	DELETE /api/wallpapers/:id    → handleWallpaperDelete
 //
 // Wallpapers are stored as plain files under
-// `<db_dir>/wallpapers/<timestamp>_<safe_name>`.  The DB is consulted
-// only to derive `db_dir` (the parent of the SQLite file).  The file
-// list endpoint scans the directory directly.
+// `<db_dir>/wallpapers/<uuid32>.<ext>`.  The DB is consulted only to derive
+// `db_dir` (the parent of the SQLite file).  The file list endpoint scans
+// the directory directly.
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -62,6 +63,7 @@ func sanitizeFilename(name string) string {
 
 // handleWallpaperUpload mirrors `handleUploadWallpaper`.  Accepts a
 // `multipart/form-data` request with a single "file" field.
+// Uses temp-file + 50MB cap + UUID naming + image compression.
 func WallpaperUpload(c *gin.Context) {
 	a := appFromCtx(c)
 
@@ -83,39 +85,68 @@ func WallpaperUpload(c *gin.Context) {
 	}
 	defer src.Close()
 
+	// Extension from original filename (sanitised).
 	safe := sanitizeFilename(fileHeader.Filename)
-	base := filepath.Base(safe)
-	ext := filepath.Ext(base)
-	stem := base
-	if ext != "" && len(ext) < len(base) {
-		stem = base[:len(base)-len(ext)]
-	}
-	unique := fmt.Sprintf("%d_%s%s", time.Now().Unix(), stem, ext)
-	dstPath := filepath.Join(dir, unique)
-	if err := saveMultipart(src, dstPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"err": err.Error()})
+	ext := filepath.Ext(filepath.Base(safe))
+
+	// Stream to temp file with 50MB limit.
+	tmp, err := os.CreateTemp(dir, "upload-*")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"err": "failed to create temp file"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"filename": unique})
-}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // clean up temp on any exit path
 
-// saveMultipart streams a multipart file part to disk.  We avoid
-// loading the whole file in memory because wallpapers can be up to 50MB.
-func saveMultipart(src multipart.File, dst string) error {
-	out, err := os.Create(dst)
+	limitReader := io.LimitReader(src, 50*1024*1024+1)
+	written, err := io.Copy(tmp, limitReader)
 	if err != nil {
-		return err
+		tmp.Close()
+		c.JSON(http.StatusInternalServerError, gin.H{"err": "failed to receive file"})
+		return
 	}
-	defer out.Close()
-	if _, err := io.Copy(out, src); err != nil {
-		_ = os.Remove(dst)
-		return err
+	if err := tmp.Close(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"err": "failed to flush temp file"})
+		return
 	}
-	return nil
+	if written > 50*1024*1024 {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"err": "file too large"})
+		return
+	}
+
+	// Process the image (decode, scale, re-encode).
+	tmpFile, err := os.Open(tmpName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"err": "failed to open temp file"})
+		return
+	}
+	defer tmpFile.Close()
+
+	processed, outExt, err := processWallpaperImage(tmpFile, ext)
+	if err != nil {
+		switch err {
+		case ErrWallpaperDimensionsTooLarge:
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"err": "image dimensions too large"})
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"err": "invalid image: " + err.Error()})
+		}
+		return
+	}
+
+	finalName := newUUIDHex() + outExt
+	dstPath := filepath.Join(dir, finalName)
+	if err := os.WriteFile(dstPath, processed, 0o600); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"err": "failed to save wallpaper"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"filename": finalName})
 }
 
 // handleWallpaperList mirrors `handleListWallpapers`.  Returns a JSON
-// array of {name} objects (filename only — no path exposure).
+// array of {name, size, refs} objects — filename only (no path exposure),
+// the on-disk byte size, and the number of rows across habits/habit_sets/
+// settings that reference the wallpaper via `local:<name>`.
 func WallpaperList(c *gin.Context) {
 	a := appFromCtx(c)
 	dir, err := wallpapersDir(a.DBPath)
@@ -133,7 +164,17 @@ func WallpaperList(c *gin.Context) {
 		if e.IsDir() {
 			continue
 		}
-		out = append(out, gin.H{"name": e.Name()})
+		info, err := os.Stat(filepath.Join(dir, e.Name()))
+		if err != nil {
+			// Skip unreadable entries — consistent with "only readable files".
+			continue
+		}
+		refs, err := a.SQLite.CountWallpaperRefs("local:" + e.Name())
+		if err != nil {
+			// Reference count query failed; treat as unreferenced.
+			refs = 0
+		}
+		out = append(out, gin.H{"name": e.Name(), "size": info.Size(), "refs": refs})
 	}
 	c.JSON(http.StatusOK, out)
 }
@@ -168,6 +209,13 @@ func WallpaperServe(c *gin.Context) {
 }
 
 // handleWallpaperDelete mirrors `handleDeleteWallpaper`.
+//
+// Order is critical for consistency: first unbind every DB reference to the
+// wallpaper (habits / habit_sets / settings) in a single transaction, then
+// physically remove the file.  If the unbind fails we return 500 and leave
+// the file untouched — no dangling `local:` refs.  If the file removal fails
+// (e.g. missing file) we still return 500; the DB is already unbound, so a
+// retry is safe.
 func WallpaperDelete(c *gin.Context) {
 	a := appFromCtx(c)
 	filename := c.Param("id")
@@ -180,11 +228,16 @@ func WallpaperDelete(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"err": "Wallpapers dir not found"})
 		return
 	}
+	unbound, err := a.SQLite.UnbindWallpaper("local:" + filename)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"err": "Failed to unbind wallpaper"})
+		return
+	}
 	if err := os.Remove(filepath.Join(dir, filename)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"err": "Failed to delete file"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	c.JSON(http.StatusOK, gin.H{"success": true, "unbound": unbound})
 }
 
 // mimeByExt maps a file extension to a MIME type.  Mirrors the Zig
@@ -210,8 +263,11 @@ func mimeByExt(ext string) string {
 
 // contentTypeToExt maps a Content-Type header value to a file extension.
 // Returns "" for unrecognised types.
+//
+// The match is case-insensitive per RFC 7231 §3.1.1.1 (media types are
+// case-insensitive): "IMAGE/PNG" must map to ".png" just like "image/png".
 func contentTypeToExt(contentType string) string {
-	switch contentType {
+	switch strings.ToLower(contentType) {
 	case "image/jpeg":
 		return ".jpg"
 	case "image/png":
@@ -229,38 +285,79 @@ func contentTypeToExt(contentType string) string {
 	}
 }
 
-// saveReader streams an io.Reader to a file on disk.  Cleanup on error.
-func saveReader(r io.Reader, dst string) error {
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
+// errURLHostNotAllowed marks an SSRF-blocked URL host.
+var errURLHostNotAllowed = errors.New("URL host not allowed")
+
+// netLookupIP is the hostname resolver used by isBlockedHost; a package var
+// so tests can stub it without touching the real DNS.
+var netLookupIP = net.LookupIP
+
+// isBlockedIP reports whether an IP falls in a network range that the
+// wallpaper fetcher must never contact.  Loopback (127.0.0.0/8, ::1) is
+// deliberately ALLOWED: this is a personal desktop app where an attacker
+// could already reach the local machine, and keeping loopback open lets the
+// dev/test flow use httptest servers bound to 127.0.0.1.  The real SSRF
+// targets are cloud metadata (169.254.169.254) and internal network ranges,
+// and those are all blocked below.
+func isBlockedIP(ip net.IP) bool {
+	if ip == nil {
+		return false
 	}
-	defer out.Close()
-	if _, err := io.Copy(out, r); err != nil {
-		_ = os.Remove(dst)
-		return err
+	// IPv4-mapped IPv6 addresses (e.g. ::ffff:127.0.0.1) carry the IPv4
+	// address inside; normalize so the private/loopback checks see it.
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
 	}
-	return nil
+	// Link-local IPv4 (169.254.0.0/16) is NOT covered by net.IP.IsPrivate()
+	// and holds the cloud-metadata endpoint 169.254.169.254.
+	if ip.IsLinkLocalUnicast() {
+		return true
+	}
+	// Explicitly allow loopback, then block the rest of the non-routable
+	// ranges: RFC 1918 private (10/8, 172.16/12, 192.168/16), IPv6 unique
+	// local (fc00::/7), link-local, multicast and unspecified addresses.
+	if ip.IsLoopback() {
+		return false
+	}
+	return ip.IsPrivate() ||
+		ip.IsMulticast() ||
+		ip.IsUnspecified() ||
+		ip.IsLinkLocalMulticast()
 }
 
-// stemFromURL extracts a sanitised stem from a URL path.
-// Falls back to "image" if the path yields nothing useful.
-func stemFromURL(rawURL string) string {
-	u, err := url.Parse(rawURL)
+// isBlockedHost resolves host (an authority string, port already stripped)
+// and reports whether the connection target is SSRF-blocked.  A host that is
+// a bare IP literal is parsed directly; otherwise every resolved address is
+// checked and the host is blocked if ANY address is blocked (an attacker
+// controlling DNS could otherwise resolve a name to a mix of public and
+// private addresses and still hit the internal one).  Resolution failures
+// are treated conservatively as blocked: if we cannot prove the host is safe,
+// we refuse to fetch it.
+func isBlockedHost(host string) bool {
+	if host == "" {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return isBlockedIP(ip)
+	}
+	addrs, err := netLookupIP(host)
 	if err != nil {
-		return "image"
+		return true
 	}
-	base := filepath.Base(u.Path)
-	ext := filepath.Ext(base)
-	if ext != "" && len(ext) < len(base) {
-		base = base[:len(base)-len(ext)]
+	if len(addrs) == 0 {
+		return true
 	}
-	if base == "" || base == "." {
-		return "image"
+	for _, ip := range addrs {
+		if isBlockedIP(ip) {
+			return true
+		}
 	}
-	return sanitizeFilename(base)
+	return false
 }
 
+// WallpaperFromURL downloads a wallpaper from a URL, processes it through
+// the same decode/scale/encode pipeline as WallpaperUpload, and saves it
+// with a UUID filename.
 func WallpaperFromURL(c *gin.Context) {
 	a := appFromCtx(c)
 
@@ -284,6 +381,15 @@ func WallpaperFromURL(c *gin.Context) {
 		return
 	}
 
+	// SSRF guard: block fetches to private / link-local / metadata ranges
+	// for the initial host.  Redirect targets are re-checked in
+	// CheckRedirect below (redirects can move the fetch to an internal
+	// host even when the original URL was public).
+	if isBlockedHost(u.Hostname()) {
+		c.JSON(http.StatusBadRequest, gin.H{"err": errURLHostNotAllowed.Error()})
+		return
+	}
+
 	redirects := 0
 	client := &http.Client{
 		Timeout: 30 * time.Second,
@@ -291,6 +397,10 @@ func WallpaperFromURL(c *gin.Context) {
 			redirects++
 			if redirects > 5 {
 				return fmt.Errorf("too many redirects")
+			}
+			// Refuse to follow a redirect into a blocked range.
+			if isBlockedHost(req.URL.Hostname()) {
+				return errURLHostNotAllowed
 			}
 			return nil
 		},
@@ -303,6 +413,10 @@ func WallpaperFromURL(c *gin.Context) {
 	}
 	resp, err := client.Do(httpReq)
 	if err != nil {
+		if errors.Is(err, errURLHostNotAllowed) {
+			c.JSON(http.StatusBadRequest, gin.H{"err": err.Error()})
+			return
+		}
 		if strings.Contains(err.Error(), "context deadline exceeded") ||
 			strings.Contains(err.Error(), "timeout") ||
 			strings.Contains(err.Error(), "Timeout") {
@@ -330,29 +444,56 @@ func WallpaperFromURL(c *gin.Context) {
 		return
 	}
 
-	stem := stemFromURL(req.URL)
-	unique := fmt.Sprintf("%d_%s%s", time.Now().Unix(), stem, ext)
-	dstPath := filepath.Join(dir, unique)
-
-	out, err := os.Create(dstPath)
+	// Stream to temp file with 50MB limit.
+	tmp, err := os.CreateTemp(dir, "upload-*")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"err": "failed to create file"})
+		c.JSON(http.StatusInternalServerError, gin.H{"err": "failed to create temp file"})
 		return
 	}
-	defer out.Close()
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
 
 	limitReader := io.LimitReader(resp.Body, 50*1024*1024+1)
-	written, err := io.Copy(out, limitReader)
+	written, err := io.Copy(tmp, limitReader)
 	if err != nil {
-		_ = os.Remove(dstPath)
-		c.JSON(http.StatusInternalServerError, gin.H{"err": "failed to save file"})
+		tmp.Close()
+		c.JSON(http.StatusInternalServerError, gin.H{"err": "failed to download file"})
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"err": "failed to flush temp file"})
 		return
 	}
 	if written > 50*1024*1024 {
-		_ = os.Remove(dstPath)
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"err": "file too large"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"filename": unique})
+	// Process the image (decode, scale, re-encode).
+	tmpFile, err := os.Open(tmpName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"err": "failed to open temp file"})
+		return
+	}
+	defer tmpFile.Close()
+
+	processed, outExt, err := processWallpaperImage(tmpFile, ext)
+	if err != nil {
+		switch err {
+		case ErrWallpaperDimensionsTooLarge:
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"err": "image dimensions too large"})
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"err": "invalid image: " + err.Error()})
+		}
+		return
+	}
+
+	finalName := newUUIDHex() + outExt
+	dstPath := filepath.Join(dir, finalName)
+	if err := os.WriteFile(dstPath, processed, 0o600); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"err": "failed to save wallpaper"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"filename": finalName})
 }

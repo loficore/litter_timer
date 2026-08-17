@@ -15,6 +15,7 @@ require (
 	github.com/wailsapp/wails/v3 v3.0.0-alpha2.114
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
 	golang.org/x/crypto v0.50.0
+	golang.org/x/image v0.40.0
 )
 
 require (
