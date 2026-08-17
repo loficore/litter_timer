@@ -7,7 +7,7 @@ import { useState, useEffect } from "preact/hooks";
 import type { FunctionalComponent } from "preact";
 import { t } from "../utils/i18n";
 import { getAPIClient } from "../utils/apiClientSingleton";
-import { WALLPAPER_LOCAL_PREFIX, resolveWallpaperUrl } from "../utils/constants";
+import { WALLPAPER_FALLBACK_GRADIENT, WALLPAPER_LOCAL_PREFIX, resolveWallpaperUrl } from "../utils/constants";
 
 interface WallpaperSelectorProps {
   /** 当前壁纸值（渐变/颜色/图片 URL） */
@@ -46,6 +46,7 @@ export const WallpaperSelector: FunctionalComponent<WallpaperSelectorProps> = ({
   const [localImages, setLocalImages] = useState<{ name: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
 
   const api = getAPIClient();
 
@@ -55,6 +56,7 @@ export const WallpaperSelector: FunctionalComponent<WallpaperSelectorProps> = ({
   const isImage = !isGradient && !isColor && value.length > 0;
 
   useEffect(() => {
+    setPreviewFailed(false);
     if (isGradient) {
       setWallpaperType("gradient");
     } else if (isColor) {
@@ -122,18 +124,6 @@ export const WallpaperSelector: FunctionalComponent<WallpaperSelectorProps> = ({
     } finally {
       setUploading(false);
       input.value = "";
-    }
-  };
-
-  const handleDeleteLocal = async (filename: string) => {
-    try {
-      await api.deleteWallpaper(filename);
-      setLocalImages((prev) => prev.filter((img) => img.name !== filename));
-      if (isLocal && value.slice(WALLPAPER_LOCAL_PREFIX.length) === filename) {
-        onChange("");
-      }
-    } catch {
-      // ignore
     }
   };
 
@@ -258,14 +248,21 @@ export const WallpaperSelector: FunctionalComponent<WallpaperSelectorProps> = ({
           </div>
           {value && !isGradient && !isColor && (
             <div className="h-20 rounded-lg overflow-hidden bg-[color:color-mix(in_oklab,var(--my-surface-strong)_86%,transparent)] border border-[color:color-mix(in_oklab,var(--my-outline)_42%,transparent)]">
-              <img
-                src={resolveWallpaperUrl(value)}
-                alt={t("modal.preview")}
-                className="w-full h-full object-cover"
-                onError={() => {
-                  // 忽略图片加载错误
-                }}
-              />
+              {previewFailed ? (
+                <div
+                  data-testid="selector-preview-fallback"
+                  className="w-full h-full"
+                  style={{ background: WALLPAPER_FALLBACK_GRADIENT }}
+                />
+              ) : (
+                <img
+                  data-testid="selector-preview-img"
+                  src={resolveWallpaperUrl(value)}
+                  alt={t("modal.preview")}
+                  className="w-full h-full object-cover"
+                  onError={() => setPreviewFailed(true)}
+                />
+              )}
             </div>
           )}
           {localImages.length > 0 && (
@@ -287,17 +284,6 @@ export const WallpaperSelector: FunctionalComponent<WallpaperSelectorProps> = ({
                       alt={img.name}
                       className="w-full h-16 object-cover"
                     />
-                    <button
-                      type="button"
-                      className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-red-600/80 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleDeleteLocal(img.name);
-                      }}
-                      title={t("modal.delete_image")}
-                    >
-                      ×
-                    </button>
                   </div>
                 ))}
               </div>

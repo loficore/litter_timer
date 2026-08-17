@@ -103,6 +103,17 @@ timer = "Focus"
 habits = "Habits"
 stats = "Stats"
 settings = "Settings"
+gallery = "Wallpaper Gallery"
+
+[gallery]
+title = "Wallpaper Gallery"
+empty = "No wallpapers yet. Upload one to get started."
+upload = "Upload"
+size = "Size"
+referenced_by = "Used by {count} item(s)"
+delete_confirm = "Delete wallpaper?"
+delete_confirm_desc = "The image file will be permanently removed. Items using it will fall back to the default background."
+unbound_note = "References will be unbound automatically."
 
 [habit]
 management = "Habit Management"

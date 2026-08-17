@@ -47,7 +47,6 @@ vi.mock("../../utils/apiClientSingleton", () => ({
   getAPIClient: () => ({
     listWallpapers: vi.fn().mockResolvedValue([]),
     uploadWallpaper: vi.fn().mockResolvedValue({ filename: "test.png" }),
-    deleteWallpaper: vi.fn().mockResolvedValue(undefined),
   }),
 }));
 

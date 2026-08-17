@@ -4,14 +4,15 @@ import { TimerPage } from "./TimerPage";
 import { HabitsPage } from "./HabitsPage";
 import { SettingsPage } from "./Settings.tsx";
 import { StatsPage } from "./Stats.tsx";
+import { WallpaperGalleryPage } from "./WallpaperGalleryPage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ToastContainer, showToast } from "./components/common/Toast";
 import { getFrontendLogLevel, isPerfDebugEnabled, isWebViewRuntime, logError, logLifecycle, logPerf } from "./utils/logger";
 import { useAppSettings, logWallpaperDebug } from "./hooks/useAppSettings";
-import { resolveWallpaperUrl } from "./utils/constants";
+import { resolveWallpaperUrl, WALLPAPER_FALLBACK_GRADIENT } from "./utils/constants";
 import { t } from "./utils/i18n";
 
-type Page = "timer" | "habits" | "stats" | "settings";
+type Page = "timer" | "habits" | "stats" | "settings" | "gallery";
 
 const formatUnknownError = (value: unknown): string => {
   if (typeof value === "string") return value;
@@ -26,6 +27,12 @@ const formatUnknownError = (value: unknown): string => {
   }
   return "未知错误";
 };
+
+/**
+ * 图片壁纸探测结果缓存：URL → 是否可加载。
+ * 同一图片在切换页面/设置时不会被重复探测。
+ */
+const probeCache = new Map<string, boolean>();
 
 export const App = () => {
   const [page, setPage] = useState<Page>("timer");
@@ -82,35 +89,90 @@ export const App = () => {
 
   useEffect(() => {
     const wp = settings.wallpaper;
+    const html = document.documentElement;
+
     if (!wp) {
-      document.documentElement.style.background = "";
-      document.documentElement.style.backgroundImage = "";
-      document.documentElement.style.backgroundSize = "";
-      document.documentElement.style.backgroundPosition = "";
-      document.documentElement.style.backgroundAttachment = "";
+      html.style.background = "";
+      html.style.backgroundImage = "";
+      html.style.backgroundSize = "";
+      html.style.backgroundPosition = "";
+      html.style.backgroundAttachment = "";
       return;
     }
 
-    if (wp.startsWith("linear")) {
-      document.documentElement.style.backgroundImage = "";
-      document.documentElement.style.background = wp;
-    } else if (wp.startsWith("#")) {
-      document.documentElement.style.backgroundImage = "";
-      document.documentElement.style.background = wp;
-    } else {
-      const imgUrl = resolveWallpaperUrl(wp);
-      document.documentElement.style.background = "";
-      document.documentElement.style.backgroundImage = `url(${imgUrl})`;
-      document.documentElement.style.backgroundSize = "cover";
-      document.documentElement.style.backgroundPosition = "center";
-      document.documentElement.style.backgroundAttachment = "fixed";
+    // 渐变 / 纯色壁纸：直接应用（行为保持不变）
+    if (wp.startsWith("linear") || wp.startsWith("#")) {
+      html.style.backgroundImage = "";
+      html.style.background = wp;
+      try {
+        localStorage.setItem("global_wallpaper", wp);
+      } catch {
+        // ignore
+      }
+      return;
     }
 
-    try {
-      localStorage.setItem("global_wallpaper", wp);
-    } catch {
-      // ignore
+    // 图片壁纸：先探测可加载性，加载失败时优雅降级为回退渐变。
+    const imgUrl = resolveWallpaperUrl(wp);
+    let cancelled = false;
+
+    const applyImage = () => {
+      html.style.background = "";
+      html.style.backgroundImage = `url(${imgUrl})`;
+      html.style.backgroundSize = "cover";
+      html.style.backgroundPosition = "center";
+      html.style.backgroundAttachment = "fixed";
+    };
+
+    const applyFallback = () => {
+      html.style.backgroundImage = "";
+      html.style.background = WALLPAPER_FALLBACK_GRADIENT;
+    };
+
+    const cached = probeCache.get(imgUrl);
+    if (cached !== undefined) {
+      if (cached) {
+        applyImage();
+      } else {
+        applyFallback();
+      }
+      try {
+        localStorage.setItem("global_wallpaper", wp);
+      } catch {
+        // ignore
+      }
+      return;
     }
+
+    const probe = new Image();
+    probe.onload = () => {
+      if (cancelled) return;
+      probeCache.set(imgUrl, true);
+      applyImage();
+      try {
+        localStorage.setItem("global_wallpaper", wp);
+      } catch {
+        // ignore
+      }
+    };
+    probe.onerror = () => {
+      if (cancelled) return;
+      probeCache.set(imgUrl, false);
+      applyFallback();
+      try {
+        localStorage.setItem("global_wallpaper", wp);
+      } catch {
+        // ignore
+      }
+    };
+    probe.src = imgUrl;
+
+    return () => {
+      cancelled = true;
+      probe.onload = null;
+      probe.onerror = null;
+      probe.src = "";
+    };
   }, [settings.wallpaper]);
 
   const handleWallpaperChange = useCallback((wallpaper: string) => {
@@ -173,6 +235,7 @@ export const App = () => {
                 onWallpaperChange={handleWallpaperChange}
               />
             )}
+            {page === "gallery" && <WallpaperGalleryPage />}
           </ErrorBoundary>
         </main>
       </div>
@@ -228,6 +291,19 @@ export const App = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
           <span className="btm-nav-label">{t("nav.settings")}</span>
+        </button>
+        <button
+          type="button"
+          data-testid="nav-gallery"
+          className={`my-bottom-nav-item ${page === "gallery" ? "active" : ""}`}
+          onClick={() => navigateTo("gallery")}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <rect x="3" y="3" width="18" height="18" rx="2" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
+            <circle cx="8.5" cy="8.5" r="1.5" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 15l-5-5L5 21" />
+          </svg>
+          <span className="btm-nav-label">{t("nav.gallery")}</span>
         </button>
       </nav>
     </>

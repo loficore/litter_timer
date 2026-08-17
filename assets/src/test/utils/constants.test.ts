@@ -6,6 +6,7 @@ import {
   TIME_DISPLAY_STYLE_OPTIONS,
   TIMER_MODES,
   WALLPAPER_FALLBACK_GRADIENT,
+  isAllowedWallpaperUrl,
   API_ENDPOINTS,
   APP_VERSION,
   DEFAULT_TIMEZONE,
@@ -99,6 +100,20 @@ describe("constants", () => {
     it("应该是一个有效的 CSS 渐变", () => {
       expect(WALLPAPER_FALLBACK_GRADIENT).toContain("linear-gradient");
       expect(WALLPAPER_FALLBACK_GRADIENT).toContain("135deg");
+    });
+  });
+
+  describe("isAllowedWallpaperUrl", () => {
+    it("应该允许 local: 前缀的本地文件引用", () => {
+      expect(isAllowedWallpaperUrl("local:x.png")).toBe(true);
+    });
+
+    it("应该允许以 / 开头的本地路径", () => {
+      expect(isAllowedWallpaperUrl("/api/wallpapers/x.png")).toBe(true);
+    });
+
+    it("应该拒绝未知的 http 域名", () => {
+      expect(isAllowedWallpaperUrl("https://evil.example.com/x.png")).toBe(false);
     });
   });
 

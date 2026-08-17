@@ -25,11 +25,11 @@ Little Timer 是一个基于 Go、Gin、SQLite 和 WebView 开发的跨平台定
 just go-dev
 ```
 
-Linux 上也可以只运行 HTTP-only 后端：
+Linux 上也可以只运行 HTTP-only 后端（需要 C 编译器用于 go-sqlite3 cgo）：
 
 ```bash
 cd neo-src
-go run ./cmd/server serve --http-only
+CC="zig cc" CGO_ENABLED=1 go run ./cmd/server serve --http-only
 ```
 
 需要桌面 WebView 窗口时，使用 `just go-dev-webview`。Linux WebView 运行需要 `webkit2gtk-4.1` 或 `webkitgtk-6.0` 系统库。
@@ -42,7 +42,8 @@ go run ./cmd/server serve --http-only
 
 - **Go**：使用 `neo-src/go.mod` 声明的 Go 1.25.0
 - **Node.js + pnpm**：用于前端开发与构建（前端代码位于 assets/）
-- **系统库**：桌面 WebView 模式在 Linux 上需要 `webkit2gtk-4.1` 或 `webkitgtk-6.0`
+- **C 编译器**：`just go-build` / `just go-dev` 需要 gcc、clang、cc 或 `zig cc`（自动探测，优先级递减）。go-sqlite3 需要 cgo，无 C 编译器会导致运行时 "go-sqlite3 requires cgo" 错误。`just` 配方通过 `scripts/go-wrapper.sh` 自动设置 `CGO_ENABLED=1` 并选择编译器。
+- **系统库**（仅桌面 WebView 模式）：`webkit2gtk-4.1` 或 `webkitgtk-6.0`（+ `libgtk-4-dev` 构建依赖）。缺少此库时 WebView 窗口模式运行时 panic，HTTP-only 模式不受影响。
 
 > 若你只运行后端，HTTP-only 模式默认使用已存在的前端产物；需要修改 UI 时请看下方“前端开发与构建流程”。
 
@@ -123,6 +124,9 @@ just --list
 
 **Q：为什么编译失败？**
 A：确认 Go 1.25.0、Node.js 和 pnpm 已安装。嵌入前端时还要先在 `assets/` 执行 `pnpm run build`。
+
+**Q：运行时报 "go-sqlite3 requires cgo"？**
+A：go-sqlite3 是 cgo-only 驱动。`just go-dev` / `just go-build` 已自动通过 `scripts/go-wrapper.sh` 设置 cgo 环境。手动执行 `go run` 时需加 `CC="zig cc" CGO_ENABLED=1` 前缀（或用 gcc/clang，无需显式设置 CC）。
 
 **Q：编译很慢？**
 A：首次构建会下载 Go 和前端依赖，后续构建会使用本地缓存。

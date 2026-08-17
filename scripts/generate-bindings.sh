@@ -51,9 +51,12 @@ if [ "$ANDROID_MODE" = "true" ]; then
         ./cmd/server
     BINDINGS_DIR="/tmp/wails-bindings"
 else
-    # Desktop mode: standard bindings
+    # Desktop mode: standard bindings.  Pass -tags=bindings so the codegen
+    # sees wails_registration.go (gated behind //go:build bindings), without
+    # forcing the wails gtk4/webkitgtk-6.0 cgo dep into the normal build.
     go run github.com/wailsapp/wails/v3/cmd/wails3@${BINDINGS_VERSION} generate bindings \
         -ts -clean \
+        -f '-tags=bindings' \
         -d /tmp/wails-bindings \
         ./cmd/server
     BINDINGS_DIR="/tmp/wails-bindings"

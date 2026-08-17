@@ -345,6 +345,10 @@ export interface WallpaperUploadResult {
 export interface WallpaperListResult {
   /** 壁纸名称 */
   name: string;
+  /** 文件大小（字节） */
+  size: number;
+  /** 被 habits / habit_sets / settings 引用的次数 */
+  refs: number;
 }
 
 /**

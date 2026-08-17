@@ -7,7 +7,7 @@ import { useState, useEffect } from "preact/hooks";
 import type { FunctionalComponent } from "preact";
 import { t } from "../utils/i18n";
 import { getAPIClient } from "../utils/apiClientSingleton";
-import { WALLPAPER_LOCAL_PREFIX, resolveWallpaperUrl } from "../utils/constants";
+import { WALLPAPER_FALLBACK_GRADIENT, WALLPAPER_LOCAL_PREFIX, resolveWallpaperUrl } from "../utils/constants";
 
 interface WallpaperModalProps {
   /** 是否显示弹窗 */
@@ -41,8 +41,8 @@ export const WallpaperModal: FunctionalComponent<WallpaperModalProps> = ({
   const [localImages, setLocalImages] = useState<LocalImage[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
 
   const api = getAPIClient();
 
@@ -51,6 +51,7 @@ export const WallpaperModal: FunctionalComponent<WallpaperModalProps> = ({
   const isImage = !isColor && value.length > 0;
 
   useEffect(() => {
+    setPreviewFailed(false);
     if (isColor) {
       setWallpaperType("solid");
       setColorValue(value);
@@ -107,6 +108,7 @@ export const WallpaperModal: FunctionalComponent<WallpaperModalProps> = ({
 
   const handleImageError = () => {
     setPreviewLoading(false);
+    setPreviewFailed(true);
   };
 
   const handleUpload = async (e: Event) => {
@@ -133,26 +135,6 @@ export const WallpaperModal: FunctionalComponent<WallpaperModalProps> = ({
   const handleSelectLocal = (filename: string) => {
     setImageUrl(filename);
     onChange(`${WALLPAPER_LOCAL_PREFIX}${filename}`);
-  };
-
-  const handleDeleteClick = (filename: string) => {
-    setDeleteTarget(filename);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      await api.deleteWallpaper(deleteTarget);
-      setLocalImages((prev) => prev.filter((img) => img.name !== deleteTarget));
-      if (isLocal && value.slice(WALLPAPER_LOCAL_PREFIX.length) === deleteTarget) {
-        onChange("");
-        setImageUrl("");
-      }
-    } catch {
-      // ignore
-    } finally {
-      setDeleteTarget(null);
-    }
   };
 
   const getPreviewUrl = (): string => {
@@ -307,13 +289,22 @@ export const WallpaperModal: FunctionalComponent<WallpaperModalProps> = ({
                     {t("modal.current_wallpaper")}
                   </div>
                   <div className="relative rounded-lg overflow-hidden bg-[var(--my-surface-strong)] border border-[var(--my-outline)]">
-                    <img
-                      src={getPreviewUrl()}
-                      alt={t("modal.preview")}
-                      className="w-full h-40 object-cover"
-                      onLoad={handleImageLoad}
-                      onError={handleImageError}
-                    />
+                    {previewFailed ? (
+                      <div
+                        data-testid="modal-preview-fallback"
+                        className="w-full h-40"
+                        style={{ background: WALLPAPER_FALLBACK_GRADIENT }}
+                      />
+                    ) : (
+                      <img
+                        data-testid="modal-preview-img"
+                        src={getPreviewUrl()}
+                        alt={t("modal.preview")}
+                        className="w-full h-40 object-cover"
+                        onLoad={handleImageLoad}
+                        onError={handleImageError}
+                      />
+                    )}
                     <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 truncate">
                       {isLocal ? imageUrl : imageUrl.split("/").pop() || imageUrl}
                     </div>
@@ -389,17 +380,6 @@ export const WallpaperModal: FunctionalComponent<WallpaperModalProps> = ({
                           alt={img.name}
                           className="w-full h-16 object-cover"
                         />
-                        <button
-                          type="button"
-                          className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-red-600/80 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleDeleteClick(img.name);
-                          }}
-                          title={t("modal.delete_image")}
-                        >
-                          ×
-                        </button>
                       </div>
                     ))}
                   </div>
@@ -414,34 +394,6 @@ export const WallpaperModal: FunctionalComponent<WallpaperModalProps> = ({
             </div>
           )}
         </div>
-
-        {deleteTarget && (
-          <div className="fixed inset-0 z-60 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/50" onClick={() => setDeleteTarget(null)} />
-            <div className="relative my-surface-modal rounded-xl p-4 max-w-sm mx-4">
-              <h4 className="font-bold mb-2">{t("modal.delete_confirm")}</h4>
-              <p className="text-sm text-[var(--my-on-surface-variant)] mb-4">
-                {t("modal.delete_confirm_desc")}
-              </p>
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="btn btn-sm btn-ghost"
-                  onClick={() => setDeleteTarget(null)}
-                >
-                  {t("modal.cancel")}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-error"
-                  onClick={() => void handleConfirmDelete()}
-                >
-                  {t("modal.confirm")}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

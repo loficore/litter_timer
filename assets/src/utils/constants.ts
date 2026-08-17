@@ -47,7 +47,7 @@ export const TIMER_MODES = {
 } as const;
 
 // 页面类型
-export type Page = "timer" | "habits" | "stats" | "settings";
+export type Page = "timer" | "habits" | "stats" | "settings" | "gallery";
 
 // 允许的壁纸域名白名单
 export const ALLOWED_WALLPAPER_DOMAINS = [
@@ -81,6 +81,8 @@ export function resolveWallpaperUrl(value: string): string {
  * @returns 是否允许
  */
 export function isAllowedWallpaperUrl(url: string): boolean {
+    // 本地文件引用始终允许
+    if (url.startsWith(WALLPAPER_LOCAL_PREFIX)) return true;
     // 本地路径允许
     if (url.startsWith("/")) return true;
     // 必须 http/https

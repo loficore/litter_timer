@@ -18,11 +18,6 @@ vi.mock("../../utils/i18n", () => ({
       "modal.upload_fail": "Fetch failed",
       "modal.local_images": "Local Images",
       "modal.no_images": "No images",
-      "modal.delete_image": "Delete",
-      "modal.delete_confirm": "Confirm Delete",
-      "modal.delete_confirm_desc": "Are you sure?",
-      "modal.cancel": "Cancel",
-      "modal.confirm": "Confirm",
     };
     return translations[key] || key;
   },
@@ -36,7 +31,6 @@ vi.mock("../../utils/apiClientSingleton", () => ({
     fetchWallpaperByUrl: mockFetchWallpaperByUrl,
     listWallpapers: mockListWallpapers,
     uploadWallpaper: vi.fn(),
-    deleteWallpaper: vi.fn(),
   }),
 }));
 
@@ -126,5 +120,24 @@ describe("WallpaperModal", () => {
 
     // onChange should NOT be called just from typing
     expect(mockOnChange).not.toHaveBeenCalled();
+  });
+
+  it("预览图片加载失败时显示渐变兜底占位", async () => {
+    render(
+      <WallpaperModal
+        isOpen={true}
+        value="https://example.com/missing.jpg"
+        onChange={mockOnChange}
+        onClose={mockOnClose}
+      />
+    );
+
+    const preview = await screen.findByTestId("modal-preview-img");
+    expect(preview).toBeTruthy();
+
+    fireEvent.error(preview);
+
+    expect(screen.getByTestId("modal-preview-fallback")).toBeTruthy();
+    expect(screen.queryByTestId("modal-preview-img")).toBeNull();
   });
 });

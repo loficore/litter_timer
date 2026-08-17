@@ -1,20 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/preact";
+import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/preact";
 import type { ComponentChildren } from "preact";
 import { App } from "../App";
 
 const mocks = vi.hoisted(() => ({
   showToastMock: vi.fn(),
+  // 服务端返回的壁纸值，测试中动态修改以驱动 App 的壁纸效果
+  serverWallpaper: "",
 }));
 
 vi.mock("../utils/apiClientSingleton", () => ({
   getAPIClient: vi.fn(() => ({
-    getSettings: vi.fn().mockResolvedValue({
-      basic: {
-        theme_mode: "dark",
-        wallpaper: "",
-      },
-    }),
+    getSettings: vi.fn().mockImplementation(() =>
+      Promise.resolve({
+        basic: {
+          theme_mode: "dark",
+          wallpaper: mocks.serverWallpaper,
+        },
+      })
+    ),
   })),
 }));
 
@@ -33,7 +37,9 @@ vi.mock("../utils/constants", () => ({
     WALLPAPER: "lt_wallpaper",
     WALLPAPER_DEBUG: "lt_wallpaper_debug",
   },
-  resolveWallpaperUrl: vi.fn((value: string) => value),
+  resolveWallpaperUrl: vi.fn((value: string) =>
+    value.startsWith("local:") ? `/api/wallpapers/${value.slice("local:".length)}` : value
+  ),
 }));
 
 vi.mock("../components/Sidebar", () => ({
@@ -81,6 +87,10 @@ vi.mock("../Settings", () => ({
   ),
 }));
 
+vi.mock("../WallpaperGalleryPage", () => ({
+  WallpaperGalleryPage: () => <div data-testid="gallery-page" />,
+}));
+
 vi.mock("../components/ErrorBoundary", () => ({
   ErrorBoundary: ({ children, onError }: { children: ComponentChildren; onError?: (error: Error) => void }) => (
     <div data-testid="error-boundary">
@@ -96,9 +106,43 @@ vi.mock("../components/common/Toast", () => ({
 }));
 
 describe("App", () => {
+  // --- Image 探测桩：手动触发 onload/onerror，覆盖图片壁纸预探测两种结果 ---
+  type ImageStub = {
+    onload: (() => void) | null;
+    onerror: (() => void) | null;
+    src: string;
+  };
+  let imageInstances: ImageStub[];
+
+  const installImageStub = () => {
+    imageInstances = [];
+    vi.stubGlobal("Image", class {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      src = "";
+      constructor() {
+        imageInstances.push(this);
+      }
+    });
+  };
+
+  const fireImageLoad = (idx = 0) => {
+    imageInstances[idx]?.onload?.();
+  };
+  const fireImageError = (idx = 0) => {
+    imageInstances[idx]?.onerror?.();
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    installImageStub();
+    // 清除上一个测试残留的 html 内联样式（cleanup 只卸载组件，不重置样式）
+    document.documentElement.removeAttribute("style");
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("应该渲染 App 组件", () => {
@@ -146,6 +190,17 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("stats-page")).toBeTruthy();
+    });
+  });
+
+  it("点击导航到壁纸图库页面", async () => {
+    render(<App />);
+
+    const galleryButton = screen.getByTestId("nav-gallery");
+    fireEvent.click(galleryButton);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("gallery-page")).toBeTruthy();
     });
   });
 
@@ -214,6 +269,92 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("settings-page")).toBeTruthy();
+    });
+  });
+
+  describe("全局壁纸图片预探测", () => {
+    const GRADIENT = "linear-gradient(135deg, #ff0000 0%, #0000ff 100%)";
+
+    // 每个测试都用新组件渲染：壁纸设置经由 getSettings 异步加载
+    const renderWithWallpaper = async (wp: string) => {
+      mocks.serverWallpaper = wp;
+      render(<App />);
+      await waitFor(() => {
+        expect(document.documentElement.style.backgroundImage).toBeDefined();
+      });
+    };
+
+    const waitForImageProbe = async () => {
+      await waitFor(() => {
+        expect(imageInstances.length).toBeGreaterThan(0);
+      });
+    };
+
+    it("图片壁纸 onload 成功后应用图片背景", async () => {
+      await renderWithWallpaper("local:photo.jpg");
+      await waitForImageProbe();
+
+      fireImageLoad(0);
+
+      await waitFor(() => {
+        expect(document.documentElement.style.backgroundImage).toBe(
+          "url(/api/wallpapers/photo.jpg)"
+        );
+      });
+      expect(document.documentElement.style.backgroundSize).toBe("cover");
+      expect(document.documentElement.style.backgroundPosition).toBe("center");
+      expect(document.documentElement.style.backgroundAttachment).toBe("fixed");
+    });
+
+    it("图片壁纸 onerror 后优雅降级为回退渐变", async () => {
+      await renderWithWallpaper("local:broken.jpg");
+      await waitForImageProbe();
+
+      fireImageError(0);
+
+      // 降级路径：清除图片引用，且不设置图片长手属性（区别于 onload 成功路径）
+      await waitFor(() => {
+        expect(document.documentElement.style.backgroundImage).toBe("");
+      });
+      expect(document.documentElement.style.backgroundSize).toBe("");
+      expect(document.documentElement.style.backgroundPosition).toBe("");
+      expect(document.documentElement.style.backgroundAttachment).toBe("");
+    });
+
+    it("渐变/纯色壁纸不探测，直接应用", async () => {
+      await renderWithWallpaper(GRADIENT);
+
+      // 渐变分支同步持久化 wallpaper → 等待它发生以确认 effect 已执行
+      await waitFor(() => {
+        expect(localStorage.setItem).toHaveBeenCalledWith("global_wallpaper", GRADIENT);
+      });
+      // 渐变路径不创建 Image 探测实例，且不设置图片长手属性
+      expect(imageInstances.length).toBe(0);
+      expect(document.documentElement.style.backgroundImage).toBe("");
+      expect(document.documentElement.style.backgroundSize).toBe("");
+    });
+
+    it("同 URL 图片探测结果缓存，避免重复探测", async () => {
+      await renderWithWallpaper("local:cached.jpg");
+      await waitForImageProbe();
+      fireImageLoad(0);
+      await waitFor(() => {
+        expect(document.documentElement.style.backgroundImage).toBe(
+          "url(/api/wallpapers/cached.jpg)"
+        );
+      });
+      expect(imageInstances.length).toBe(1);
+
+      // 重新挂载同一组件：命中缓存，不再创建新的 Image
+      cleanup();
+      mocks.serverWallpaper = "local:cached.jpg";
+      render(<App />);
+      await waitFor(() => {
+        expect(document.documentElement.style.backgroundImage).toBe(
+          "url(/api/wallpapers/cached.jpg)"
+        );
+      });
+      expect(imageInstances.length).toBe(1);
     });
   });
 });

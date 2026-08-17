@@ -25,6 +25,17 @@ timer = "专注"
 habits = "习惯"
 stats = "统计"
 settings = "设置"
+gallery = "壁纸图库"
+
+[gallery]
+title = "壁纸图库"
+empty = "还没有壁纸，先上传一张吧。"
+upload = "上传图片"
+size = "大小"
+referenced_by = "被 {count} 个条目使用"
+delete_confirm = "删除这张壁纸？"
+delete_confirm_desc = "图片文件将被永久删除，使用它的条目会降级为默认背景。"
+unbound_note = "引用会自动解除。"
 
 [button]
 cancel = "取消"

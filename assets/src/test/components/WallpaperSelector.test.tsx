@@ -35,14 +35,12 @@ vi.mock("../../utils/i18n", () => ({
 const mockFetchWallpaperByUrl = vi.fn();
 const mockListWallpapers = vi.fn().mockResolvedValue([]);
 const mockUploadWallpaper = vi.fn();
-const mockDeleteWallpaper = vi.fn();
 
 vi.mock("../../utils/apiClientSingleton", () => ({
   getAPIClient: () => ({
     fetchWallpaperByUrl: mockFetchWallpaperByUrl,
     listWallpapers: mockListWallpapers,
     uploadWallpaper: mockUploadWallpaper,
-    deleteWallpaper: mockDeleteWallpaper,
   }),
   APIClient: class {},
 }));
@@ -285,5 +283,23 @@ describe("WallpaperSelector", () => {
 
     // no onChange call at all — decoupled from input
     expect(mockOnChange).not.toHaveBeenCalled();
+  });
+
+  it("预览图片加载失败时显示渐变兜底占位", () => {
+    render(
+      <WallpaperSelector
+        value="https://example.com/missing.jpg"
+        onChange={mockOnChange}
+      />
+    );
+
+    // 初始渲染：显示预览 <img>
+    const preview = screen.getByTestId("selector-preview-img") as HTMLImageElement;
+    expect(preview).toBeTruthy();
+
+    fireEvent.error(preview);
+
+    expect(screen.getByTestId("selector-preview-fallback")).toBeTruthy();
+    expect(screen.queryByTestId("selector-preview-img")).toBeNull();
   });
 });

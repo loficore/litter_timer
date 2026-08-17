@@ -153,6 +153,77 @@ describe("HabitsPage", () => {
     expect(onStatsClick).toHaveBeenCalled();
   });
 
+  it("本地壁纸应该通过 <img> 渲染为 /api/wallpapers 路径", async () => {
+    const mockSets = [
+      { id: 1, name: "Morning", description: "", color: "#6366f1", wallpaper: "" },
+    ];
+    const mockHabits = [
+      { id: 1, set_id: 1, name: "Exercise", goal_seconds: 1800, color: "#22c55e", wallpaper: "local:x.png" },
+    ];
+
+    const { getAPIClient } = await import("../utils/apiClientSingleton");
+    vi.mocked(getAPIClient).mockReturnValue({
+      getHabitSets: vi.fn().mockResolvedValue(mockSets),
+      getHabits: vi.fn().mockResolvedValue(mockHabits),
+      deleteHabitSet: vi.fn().mockResolvedValue({}),
+      deleteHabit: vi.fn().mockResolvedValue({}),
+    });
+
+    const { container } = render(<HabitsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Morning")).toBeTruthy();
+    });
+
+    // 展开习惯集以渲染习惯卡片
+    fireEvent.click(screen.getByText("Morning"));
+
+    await waitFor(() => {
+      const img = container.querySelector('img[src="/api/wallpapers/x.png"]');
+      expect(img).toBeTruthy();
+    });
+  });
+
+  it("图片加载失败时应该显示回退渐变", async () => {
+    const mockSets = [
+      { id: 1, name: "Morning", description: "", color: "#6366f1", wallpaper: "" },
+    ];
+    const mockHabits = [
+      { id: 1, set_id: 1, name: "Exercise", goal_seconds: 1800, color: "#22c55e", wallpaper: "local:x.png" },
+    ];
+
+    const { getAPIClient } = await import("../utils/apiClientSingleton");
+    vi.mocked(getAPIClient).mockReturnValue({
+      getHabitSets: vi.fn().mockResolvedValue(mockSets),
+      getHabits: vi.fn().mockResolvedValue(mockHabits),
+      deleteHabitSet: vi.fn().mockResolvedValue({}),
+      deleteHabit: vi.fn().mockResolvedValue({}),
+    });
+
+    const { container } = render(<HabitsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Morning")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText("Morning"));
+
+    const img = await waitFor(() => {
+      const el = container.querySelector('img[src="/api/wallpapers/x.png"]');
+      expect(el).toBeTruthy();
+      return el as HTMLImageElement;
+    });
+
+    // 模拟图片加载失败
+    fireEvent.error(img);
+
+    // 回退渐变 div 出现
+    await waitFor(() => {
+      expect(screen.getByTestId("habit-card-fallback")).toBeTruthy();
+    });
+    expect(container.querySelector("img")).toBeNull();
+  });
+
   it("点击导航到设置页面", async () => {
     const onSettingsClick = vi.fn();
     render(<HabitsPage onSettingsClick={onSettingsClick} />);

@@ -200,6 +200,17 @@ timer = "集中"
 habits = "習慣"
 stats = "統計"
 settings = "設定"
+gallery = "壁紙ギャラリー"
+
+[gallery]
+title = "壁紙ギャラリー"
+empty = "壁紙がまだありません。アップロードしてください。"
+upload = "アップロード"
+size = "サイズ"
+referenced_by = "{count} 項目で使用中"
+delete_confirm = "壁紙を削除しますか？"
+delete_confirm_desc = "画像ファイルは完全に削除されます。使用中の項目はデフォルト背景に戻ります。"
+unbound_note = "参照は自動的に解除されます。"
 
 [settings.tabs]
 basic = "基本設定"

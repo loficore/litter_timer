@@ -40,16 +40,16 @@ backend-dev:
 go_src := justfile_directory() / "neo-src"
 
 go-build:
-        @cd {{go_src}} && go build -o bin/server ./cmd/server
+        @cd {{go_src}} && ../scripts/go-wrapper.sh build -o bin/server ./cmd/server
 
 go-test:
-        @cd {{go_src}} && go test ./...
+        @cd {{go_src}} && ../scripts/go-wrapper.sh test ./...
 
 go-test-race:
-        @cd {{go_src}} && go test -race ./...
+        @cd {{go_src}} && ../scripts/go-wrapper.sh test -race ./...
 
 go-vet:
-        @cd {{go_src}} && go vet ./...
+        @cd {{go_src}} && ../scripts/go-wrapper.sh vet ./...
 
 go-tidy:
         @cd {{go_src}} && go mod tidy
@@ -82,7 +82,7 @@ go-dev:
         sleep 3
 
         echo "=== 启动 Go 后端 ==="
-        cd {{go_src}} && go build -o bin/server ./cmd/server && bin/server serve --http-only --port $GO_PORT 2>&1 &
+        cd {{go_src}} && ../scripts/go-wrapper.sh build -o bin/server ./cmd/server && bin/server serve --http-only --port $GO_PORT 2>&1 &
         GO_PID=$!
 
         echo ""
@@ -117,7 +117,7 @@ go-dev-webview:
         sleep 3
 
         echo "=== 启动 Go 后端 (webview) ==="
-        cd {{go_src}} && go build -o bin/server ./cmd/server && bin/server serve --webview --port $GO_PORT &
+        cd {{go_src}} && ../scripts/go-wrapper.sh build -o bin/server ./cmd/server && bin/server serve --webview --port $GO_PORT &
         GO_PID=$!
 
         echo ""
@@ -135,7 +135,7 @@ go-clean:
         @rm -rf {{go_src}}/bin
 
 go-build-embed:
-        @cd {{go_src}} && go build -tags embed_ui -o bin/server ./cmd/server
+        @cd {{go_src}} && ../scripts/go-wrapper.sh build -tags embed_ui -o bin/server ./cmd/server
 
 # ── Android ────────────────────────────────────────────────────────────
 

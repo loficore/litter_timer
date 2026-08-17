@@ -6,13 +6,48 @@ import { getAPIClient } from "./utils/apiClientSingleton";
 import { logSuccess, logError } from "./utils/logger";
 import { formatDurationShort } from "./utils/formatters";
 import { t } from "./utils/i18n";
-import { resolveWallpaperUrl, WALLPAPER_LOCAL_PREFIX, isAllowedWallpaperUrl } from "./utils/constants";
+import { resolveWallpaperUrl, WALLPAPER_LOCAL_PREFIX, WALLPAPER_FALLBACK_GRADIENT, isAllowedWallpaperUrl } from "./utils/constants";
 import type { HabitSet, Habit, HabitWithProgress } from "./types/habit";
 
 interface HabitsPageProps {
     onStatsClick?: () => void;
     onSettingsClick?: () => void;
 }
+
+interface CardBackgroundProps {
+    wp?: string;
+}
+
+/**
+ * 卡片壁纸背景：图片类型（local: 或 http(s)）以 <img> 渲染，
+ * 加载失败时降级为 WALLPAPER_FALLBACK_GRADIENT。
+ * 渐变 / 纯色 / 空值返回 null（由卡片的 getCardBackgroundStyle 处理）。
+ */
+const CardBackground: FunctionalComponent<CardBackgroundProps> = ({ wp }) => {
+    const [failed, setFailed] = useState(false);
+    if (!wp) return null;
+    const isImage = wp.startsWith("http") || wp.startsWith(WALLPAPER_LOCAL_PREFIX);
+    if (!isImage || !isAllowedWallpaperUrl(wp)) return null;
+
+    const src = wp.startsWith(WALLPAPER_LOCAL_PREFIX) ? resolveWallpaperUrl(wp) : wp;
+    if (failed) {
+        return (
+            <div
+                data-testid="habit-card-fallback"
+                className="absolute inset-0"
+                style={{ background: WALLPAPER_FALLBACK_GRADIENT }}
+            />
+        );
+    }
+    return (
+        <img
+            src={src}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={() => setFailed(true)}
+        />
+    );
+};
 
 export const HabitsPage: FunctionalComponent<HabitsPageProps> = ({
     onStatsClick,
@@ -77,26 +112,19 @@ export const HabitsPage: FunctionalComponent<HabitsPageProps> = ({
         return habits.filter((h) => h.set_id === setId);
     };
 
-    const getCardBackgroundStyle = (habit: Habit | HabitSet) => {
+    const getCardBackgroundStyle = (habit: Habit | HabitSet): Record<string, string> => {
         const wp = habit.wallpaper;
         if (!wp) return {};
 
         const isGradient = wp.startsWith("linear");
-        const isImage = wp.startsWith("http") || wp.startsWith(WALLPAPER_LOCAL_PREFIX);
         const isColor = wp.startsWith("#");
 
         if (isGradient) {
             return { background: wp };
-        } else if (isImage && isAllowedWallpaperUrl(wp)) {
-            const imgUrl = wp.startsWith(WALLPAPER_LOCAL_PREFIX) ? resolveWallpaperUrl(wp) : wp;
-            return {
-                backgroundImage: `url(${imgUrl})`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-            };
         } else if (isColor) {
             return { backgroundColor: wp };
         }
+        // 图片类型（local: 或 http(s)）由 CardBackground 组件以 <img> 渲染
         return {};
     };
 
@@ -185,9 +213,10 @@ export const HabitsPage: FunctionalComponent<HabitsPageProps> = ({
                                                 <div
                                                     key={habit.id}
                                                     data-testid="habit-item"
-                                                    className="my-field-surface p-3 rounded-lg flex items-center justify-between cursor-pointer transition-colors overflow-hidden"
+                                                    className="relative my-field-surface p-3 rounded-lg flex items-center justify-between cursor-pointer transition-colors overflow-hidden"
                                                     style={getCardBackgroundStyle(habit)}
                                                 >
+                                                    <CardBackground wp={habit.wallpaper} />
                                                     <div className="flex items-center gap-3">
                                                         <div
                                                             className="w-3 h-3 rounded-full shrink-0"
