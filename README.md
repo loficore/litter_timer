@@ -96,6 +96,25 @@ go build -o bin/server ./cmd/server/
 ./scripts/package_go.sh --version 1.0.0
 ```
 
+## 桌面 WebView 容器构建 (podman)
+
+**为什么需要容器构建**：AlmaLinux/RHEL9 缺少 GTK4 / `webkitgtk-6.0` 开发包，无法在本地直接编译 `-tags webview` 的桌面 WebView 版本，因此借助 podman 容器提供完整的构建环境。
+
+**如何使用**：
+
+```bash
+just webview-image   # 构建/拉取带 WebView 依赖的构建镜像
+just webview-build   # 在容器内编译 -tags webview 的桌面版本
+```
+
+**构建代理（Proxy）**：构建期代理通过 `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy` 环境变量透传进容器。容器以 `--network=host` 运行，因此容器内 `localhost:7897` 即指向宿主机的 Clash 代理。若 Clash 走的是本地 HTTP 代理（非 TUN 模式），必须同时设置**大写和小写**两套代理环境变量，否则部分工具链/依赖下载可能不走代理。
+
+**前置条件**：
+
+1. **需要 podman**：建议使用 rootless（无 root）模式——若用 rootful 运行，容器内写入的文件会归 root 所有，宿主侧难以直接清理/修改。
+2. **SELinux 绑定挂载**：宿主为 SELinux Enforcing 时需要给 bind mount 加 `:Z` 重新打标签（否则容器读不到宿主目录）；若 `:Z` 不合适，可回退用 `--security-opt label=disable`。注意 `:Z` 会对整个工作区目录持久地重新标记 SELinux 上下文。
+3. **代理变量成对设置**：如上所述，`HTTP_PROXY`/`http_proxy`、`HTTPS_PROXY`/`https_proxy` 需同时配置。
+
 ## 配置说明
 
 运行时配置已改为 SQLite 持久化，不再读取 `settings.toml`。

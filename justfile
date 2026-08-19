@@ -1,10 +1,12 @@
 set shell := ["bash", "-eu", "-c"]
+set dotenv-load
 
 # ── 1. 动态加载本地私有配置 ──────────────────────────────────────────
 import? "justfile.local"
 
 SSH_TARGET := env_var_or_default("MY_ACT_SSH_TARGET", "")
 REMOTE_PATH := env_var_or_default("MY_ACT_REMOTE_PATH", "")
+ROOT := justfile_directory()
 
 # ── 2. 核心公共命令 ──────────────────────────────────────────────────
 ci-run: go-build-check build-check
@@ -147,5 +149,16 @@ apk-package:
 
 bindings:
         @./scripts/generate-bindings.sh
+
+webview-image:
+        @podman build --network=host -f Containerfile -t little-timer-webview:latest \
+                --build-arg HTTP_PROXY=${HTTP_PROXY:-} \
+                --build-arg HTTPS_PROXY=${HTTPS_PROXY:-} \
+                --build-arg http_proxy=${http_proxy:-${HTTP_PROXY:-}} \
+                --build-arg https_proxy=${https_proxy:-${HTTPS_PROXY:-}} \
+                .
+
+webview-build:
+        @podman run --rm --network=host -v "{{ROOT}}:/workspace:Z" -v little-timer-gomod:/root/go/pkg/mod -v little-timer-gocache:/root/.cache/go-build -w /workspace little-timer-webview:latest bash -c 'mkdir -p neo-src/bin && cd neo-src && go build -tags "webview,embed_ui" -o bin/server ./cmd/server && cd .. && bash scripts/generate-bindings.sh && bash scripts/verify-webview-build.sh'
 
 default: go-dev
