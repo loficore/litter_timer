@@ -169,12 +169,8 @@ describe("TimerPage", () => {
     const onHabitsClick = vi.fn();
     render(<TimerPage onHabitsClick={onHabitsClick} />);
 
-    const buttons = screen.getAllByRole("button");
-    const iconButton = buttons.find((btn) => btn.querySelector("svg"));
-    if (iconButton) {
-      fireEvent.click(iconButton);
-      expect(onHabitsClick).toHaveBeenCalled();
-    }
+    fireEvent.click(screen.getByRole("button", { name: "nav.habits" }));
+    expect(onHabitsClick).toHaveBeenCalled();
   });
 
   it.skip("时间格式应该正确显示", () => {

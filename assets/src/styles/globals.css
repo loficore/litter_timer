@@ -490,16 +490,6 @@ html.light-mode .apexcharts-yaxistooltip {
     }
   }
 
-  .btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  }
-
-  .btn:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  }
-
   .seven-segment-display.is-active {
     filter: drop-shadow(0 0 15px var(--accent-color));
   }

@@ -4,6 +4,7 @@ import { Header } from "./components/Header";
 import { HabitModal } from "./components/HabitModal";
 import { getAPIClient } from "./utils/apiClientSingleton";
 import { logSuccess, logError } from "./utils/logger";
+import { PencilIconComponent, TrashIconComponent } from "./utils/icons";
 import { formatDurationShort } from "./utils/formatters";
 import { t } from "./utils/i18n";
 import { resolveWallpaperUrl, WALLPAPER_LOCAL_PREFIX, WALLPAPER_FALLBACK_GRADIENT, isAllowedWallpaperUrl } from "./utils/constants";
@@ -187,7 +188,7 @@ export const HabitsPage: FunctionalComponent<HabitsPageProps> = ({
                                                 editData: set,
                                             })}
                                         >
-                                            ✏️
+                                            <PencilIconComponent aria-label={t("modal.edit_set")} />
                                         </button>
                                         <button
                                             className="btn btn-ghost btn-sm btn-circle"
@@ -197,7 +198,7 @@ export const HabitsPage: FunctionalComponent<HabitsPageProps> = ({
                                                 name: set.name,
                                             })}
                                         >
-                                            🗑️
+                                            <TrashIconComponent aria-label={t("button.delete")} />
                                         </button>
                                     </div>
                                 </div>
@@ -232,25 +233,25 @@ export const HabitsPage: FunctionalComponent<HabitsPageProps> = ({
                                                     <div className="flex gap-2 shrink-0">
                                                         <button
                                                             className="btn btn-ghost btn-sm btn-circle"
-                                                            onClick={() => setModalState({
-                                                                isOpen: true,
-                                                                mode: "habit",
-                                                                editData: habit,
-                                                                setId: set.id,
-                                                            })}
-                                                        >
-                                                            ✏️
-                                                        </button>
-                                                        <button
-                                                            className="btn btn-ghost btn-sm btn-circle"
-                                                            onClick={() => setDeleteConfirm({
-                                                                type: "habit",
-                                                                id: habit.id,
-                                                                name: habit.name,
-                                                            })}
-                                                        >
-                                                            🗑️
-                                                        </button>
+                                            onClick={() => setModalState({
+                                                isOpen: true,
+                                                mode: "habit",
+                                                editData: habit,
+                                                setId: set.id,
+                                            })}
+                                        >
+                                            <PencilIconComponent aria-label={t("modal.edit_habit")} />
+                                        </button>
+                                        <button
+                                            className="btn btn-ghost btn-sm btn-circle"
+                                            onClick={() => setDeleteConfirm({
+                                                type: "habit",
+                                                id: habit.id,
+                                                name: habit.name,
+                                            })}
+                                        >
+                                            <TrashIconComponent aria-label={t("button.delete")} />
+                                        </button>
                                                     </div>
                                                 </div>
                                             ))

@@ -150,9 +150,6 @@
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    -webkit-user-select: none;
-    user-select: none;
-    -webkit-touch-callout: none;
     position: relative;
   }
 
@@ -253,11 +250,11 @@
   }
 
   .text-base-content\/50 {
-    color: rgba(255, 255, 255, 0.60) !important;
+    color: rgba(255, 255, 255, 0.72) !important;
   }
 
   .text-base-content\/30 {
-    color: rgba(255, 255, 255, 0.45) !important;
+    color: rgba(255, 255, 255, 0.55) !important;
   }
 
   /* 浅色模式下，常用语义文本类统一提升可读性 */
@@ -274,11 +271,11 @@
   }
 
   html.light-mode .text-base-content\/50 {
-    color: color-mix(in oklab, var(--my-on-surface) 60%, transparent) !important;
+    color: color-mix(in oklab, var(--my-on-surface) 72%, transparent) !important;
   }
 
   html.light-mode .text-base-content\/30 {
-    color: color-mix(in oklab, var(--my-on-surface) 45%, transparent) !important;
+    color: color-mix(in oklab, var(--my-on-surface) 55%, transparent) !important;
   }
 
   html.light-mode .text-primary {

@@ -40,6 +40,7 @@ export const Header: FunctionalComponent<HeaderProps> = ({
           <button
             onClick={onBackClick}
             title={t("common.back")}
+            aria-label={t("common.back")}
             className="my-back-btn"
           >
             <ArrowLeftIconComponent />
@@ -55,6 +56,7 @@ export const Header: FunctionalComponent<HeaderProps> = ({
           <button
             onClick={onStatsClick}
             title={t("stats.title") || "统计"}
+            aria-label={t("stats.title") || "Statistics"}
             className="my-icon-btn"
           >
             <ChartIcon />
@@ -64,6 +66,7 @@ export const Header: FunctionalComponent<HeaderProps> = ({
           <button
             onClick={onSettingsClick}
             title={t("common.settings_title")}
+            aria-label={t("common.settings_title")}
             className="my-icon-btn"
           >
             <SettingsIcon />

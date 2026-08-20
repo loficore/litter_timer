@@ -60,7 +60,7 @@ go-lint: go-vet
 
 go-build-check: go-tidy go-vet go-test
 
-go-dev:
+go-dev host="":
         #!/usr/bin/env bash
         set -e
         trap 'kill $VITE_PID $GO_PID 2>/dev/null; exit 0' INT TERM
@@ -76,8 +76,13 @@ go-dev:
         GO_PORT=$(find_available_port 8013)
         export BACKEND_PORT=$GO_PORT
 
+        HOST_FLAG=""
+        if [ -n "{{host}}" ]; then
+            HOST_FLAG="--host"
+        fi
+
         echo "=== 启动前端 Dev Server ==="
-        cd assets && pnpm run dev &
+        cd assets && pnpm run dev $HOST_FLAG &
         VITE_PID=$!
         cd ..
         echo "等待前端服务启动..."
@@ -87,9 +92,14 @@ go-dev:
         cd {{go_src}} && ../scripts/go-wrapper.sh build -o bin/server ./cmd/server && bin/server serve --http-only --port $GO_PORT 2>&1 &
         GO_PID=$!
 
+        FRONTEND_URL="http://localhost:5173"
+        if [ -n "{{host}}" ]; then
+            FRONTEND_URL="http://0.0.0.0:5173"
+        fi
+
         echo ""
         echo "=== 服务已启动 ==="
-        echo "前端: http://localhost:5173"
+        echo "前端: $FRONTEND_URL"
         echo "Go API: http://localhost:$GO_PORT"
         echo ""
         echo "按 Ctrl+C 停止所有服务"

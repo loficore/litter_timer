@@ -50,6 +50,49 @@
     transform: scale(1.02);
   }
 
+  .btn-ghost {
+    color: var(--my-on-surface);
+    background: transparent;
+    border-color: color-mix(in oklab, var(--my-outline) 50%, transparent);
+  }
+
+  .btn-success {
+    background-color: color-mix(in oklab, var(--my-on-primary-container) 72%, var(--my-surface));
+    color: var(--my-on-primary-container);
+  }
+
+  .btn-error {
+    background-color: color-mix(in oklab, rgba(239, 68, 68, 0.22) 88%, var(--my-surface));
+    color: #fca5a5;
+    border-color: color-mix(in oklab, rgba(239, 68, 68, 0.35) 60%, transparent);
+  }
+
+  .btn-outline {
+    border-color: color-mix(in oklab, var(--my-outline) 60%, transparent);
+    color: var(--my-on-surface);
+  }
+
+  html.light-mode .btn-ghost {
+    color: var(--my-on-surface);
+    background: transparent;
+    border-color: color-mix(in oklab, var(--my-outline) 50%, transparent);
+  }
+
+  html.light-mode .btn-success {
+    background-color: color-mix(in oklab, var(--my-on-primary-container) 82%, var(--my-surface));
+    color: var(--my-on-primary-container);
+  }
+
+  html.light-mode .btn-error {
+    background-color: color-mix(in oklab, rgba(239, 68, 68, 0.12) 88%, var(--my-surface));
+    color: #b91c1c;
+  }
+
+  html.light-mode .btn-outline {
+    border-color: color-mix(in oklab, var(--my-outline) 60%, transparent);
+    color: var(--my-on-surface);
+  }
+
   .timer-option-control {
     @apply h-11 sm:h-12 rounded-xl px-4 sm:px-5 text-sm sm:text-base font-medium;
     min-height: var(--touch-target-min);

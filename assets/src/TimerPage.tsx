@@ -19,6 +19,7 @@ import { useTimer } from "./hooks/useTimer";
 import type { TimerMode } from "./hooks/useTimer";
 import { showToast } from "./components/common/Toast";
 import { vibrateForToast } from "./utils/vibrate";
+import { PlayIconComponent, PauseIconComponent, CheckIconComponent, ResetIcon, CloseIcon, PlusIconComponent, ChevronDownIconComponent, ForwardIconComponent, HabitsIconComponent } from "./utils/icons";
 
 interface TimerPageProps {
     onHabitsClick?: () => void;
@@ -376,10 +377,8 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
                     <span className="my-topbar-title text-xl font-bold">{t("timer.title")}</span>
                 </div>
                 <div className="flex-none">
-                    <button className="my-icon-btn" onClick={onHabitsClick}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        </svg>
+                    <button className="my-icon-btn" onClick={onHabitsClick} aria-label={t("nav.habits")}>
+                        <HabitsIconComponent className="h-5 w-5" />
                     </button>
                 </div>
             </header>
@@ -407,15 +406,11 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
                             </>
                         ) : (
                             <>
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                </svg>
+                                <PlusIconComponent className="h-5 w-5" />
                                 {t("timer.select_habit")}
                             </>
                         )}
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
+                        <ChevronDownIconComponent className="h-4 w-4" />
                     </button>
 
                     <DropdownSelect
@@ -490,9 +485,7 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
                             className="btn btn-primary btn-lg min-w-[100px] sm:min-w-[130px]"
                             onClick={() => void handlePause()}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                            <PauseIconComponent className="h-6 w-6" />
                             {t("timer.pause")}
                         </button>
                     ) : isPaused ? (
@@ -501,9 +494,7 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
                             className="btn btn-primary btn-lg min-w-[100px] sm:min-w-[130px]"
                             onClick={() => void handleResume()}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                            </svg>
+                            <PlayIconComponent className="h-6 w-6" />
                             {t("timer.resume")}
                         </button>
                     ) : (
@@ -512,9 +503,7 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
                             className="btn btn-primary btn-lg min-w-[100px] sm:min-w-[130px]"
                             onClick={() => void handleStart()}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                            </svg>
+                            <PlayIconComponent className="h-6 w-6" />
                             {isFinished ? t("timer.restart") : (selectedHabitId ? t("timer.start") : t("timer.select_habit"))}
                         </button>
                     )}
@@ -525,9 +514,7 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
                             className="btn btn-ghost btn-lg min-w-[90px] sm:min-w-[110px]"
                             onClick={() => void handleSkipToNext()}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                            </svg>
+                            <ForwardIconComponent className="h-6 w-6" />
                             {t("timer.skip")}
                         </button>
                     )}
@@ -538,9 +525,7 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
                             className="btn btn-success btn-lg min-w-[90px] sm:min-w-[110px]"
                             onClick={() => void handleFinish()}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
+                            <CheckIconComponent className="h-6 w-6" />
                             {t("timer.finish")}
                         </button>
                     )}
@@ -550,9 +535,7 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
                         className="btn btn-secondary btn-lg min-w-[90px] sm:min-w-[110px]"
                         onClick={() => void handleReset()}
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
+                        <ResetIcon className="h-6 w-6" />
                         {t("timer.reset")}
                     </button>
                 </div>
@@ -565,9 +548,7 @@ export const TimerPage: FunctionalComponent<TimerPageProps> = ({
                         <div className="p-4 border-b border-[var(--my-outline)] flex justify-between items-center">
                             <h3 className="text-lg font-bold">{t("timer.select_habit")}</h3>
                             <button className="btn btn-ghost btn-sm btn-circle" onClick={() => setShowHabitPicker(false)}>
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
+                                <CloseIcon className="h-5 w-5" />
                             </button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-2">

@@ -1,0 +1,38 @@
+{
+  "batches": [
+    {
+      "message": "refactor(frontend): 图标组件集中化重构，清理废弃页面/组件及旧测试",
+      "paths": [
+        "assets/src/utils/icons.tsx",
+        "assets/src/App.tsx",
+        "assets/src/TimerPage.tsx",
+        "assets/src/HabitsPage.tsx",
+        "assets/src/components/Header.tsx",
+        "assets/src/components/Sidebar.tsx",
+        "assets/src/Homepage.tsx",
+        "assets/src/HomePage.css",
+        "assets/src/Settings.css",
+        "assets/src/components/Button.tsx",
+        "assets/src/components/ControlPanel.tsx",
+        "assets/src/components/TimeDisplay.tsx",
+        "assets/src/test/Homepage.test.tsx",
+        "assets/src/test/components/Button.test.tsx",
+        "assets/src/test/components/ControlPanel.test.tsx",
+        "assets/src/test/components/TimeDisplay.test.tsx",
+        "assets/src/test/setup.ts",
+        "assets/src/test/TimerPage.test.tsx"
+      ]
+    },
+    {
+      "message": "feat(frontend): 图表主题色跟随 CSS 变量，样式与开发脚本微调",
+      "paths": [
+        "assets/src/Stats.tsx",
+        "assets/src/styles/base.css",
+        "assets/src/styles/globals.css",
+        "assets/src/styles/components/controls.css",
+        "assets/index.html",
+        "justfile"
+      ]
+    }
+  ]
+}

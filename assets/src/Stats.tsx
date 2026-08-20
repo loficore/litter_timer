@@ -352,9 +352,14 @@ export const StatsPage: FunctionalComponent<StatsPageProps> = ({ onBackClick }) 
 
     const updateStartAt = performance.now();
     const isLightMode = typeof document !== "undefined" && document.documentElement.classList.contains("light-mode");
-    const chartTextColor = isLightMode ? "#4a3b2b" : "#f3f4f6";
-    const chartMutedTextColor = isLightMode ? "#6b5d4f" : "#9ca3af";
-    const chartGridColor = isLightMode ? "#cbb8a0" : "#374151";
+    const readCssVar = (name: string) => {
+      if (typeof document === "undefined") return "";
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    };
+    const chartTextColor = readCssVar("--my-on-surface") || "#f3f4f6";
+    const chartMutedTextColor = readCssVar("--my-on-surface-variant") || "#9ca3af";
+    const chartGridColor = readCssVar("--my-outline") || "#374151";
+    const chartAccentColor = readCssVar("--accent-color") || "#6366f1";
     const chartThemeMode: "light" | "dark" = isLightMode ? "light" : "dark";
 
     const renderPieChart = async () => {
@@ -397,7 +402,7 @@ export const StatsPage: FunctionalComponent<StatsPageProps> = ({ onBackClick }) 
             donut: {
               labels: {
                 show: true,
-                name: { show: true, color: "#fff" },
+                name: { show: true, color: chartTextColor },
                 value: {
                   show: true,
                   color: chartTextColor,
@@ -525,7 +530,7 @@ export const StatsPage: FunctionalComponent<StatsPageProps> = ({ onBackClick }) 
               {
                 label: t("stats.total_focus_time"),
                 data: barData.seriesData,
-                backgroundColor: "#6366f1",
+                backgroundColor: chartAccentColor,
                 borderRadius: 4,
                 maxBarThickness: 42,
               },
